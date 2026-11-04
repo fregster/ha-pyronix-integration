@@ -1,8 +1,10 @@
 # Pyronix Cloud for Home Assistant
 
-> **Status: pre-alpha / research.** The protocol has been worked out from the Android app
-> (see [PROTOCOL.md](PROTOCOL.md)). It has **not yet been tested against a real panel**. Do not
-> rely on this to protect your property.
+> **Status: pre-alpha.** The protocol was worked out from the Android app (see
+> [PROTOCOL.md](PROTOCOL.md)). Read-only sessions (handshake, login, state dump, pushed updates)
+> have been tested against a real Euro 46. The library and integration are tested offline against
+> a fake panel; **arming and disarming have not been tested on a real panel yet.** Do not rely on
+> this to protect your property.
 
 An unofficial Home Assistant custom integration for Pyronix intruder alarm panels (Enforcer,
 Euro 46). It uses the same Pyronix Cloud relay as the official **HomeControl2.0** app.
@@ -26,16 +28,32 @@ Home Assistant ──WSS──▶ wss://app.pyronixcloud.com ──(panel uplink
 
 The full specification is in [PROTOCOL.md](PROTOCOL.md).
 
-## Planned features
+## Features (first version)
 
-| HA platform | Source | Notes |
-|---|---|---|
-| `alarm_control_panel` | One per area (`area` JSON) | Arm away / disarm; arming uses force-omit (configurable) |
-| `binary_sensor` | One per input/zone (`input` JSON) | Open/closed, with omitted, problem and areas as attributes |
-| `switch` | One per user output (`output` JSON) | "Automated controls" |
-| `button` / service | Input omit / un-omit | Off by default |
-| `sensor` | Faults, panel info, connection state | Diagnostic |
-| Event / logbook | Panel event log | On demand |
+| HA platform | What it shows |
+|---|---|
+| `alarm_control_panel` | One entity per panel on level-set panels: level A → *away*, B → *night*, C → *custom bypass*. State comes from the panel's area status codes. Arming uses force-omit, as the app does. Area-set panels get one entity per area. |
+| `binary_sensor` | One per input (zone): open/closed. |
+| `sensor` | Diagnostic: connection state and fault count. |
+| Diagnostics | Download with all credentials and identifiers redacted. |
+
+**Connection modes** (Settings → Devices & services → Pyronix Cloud → Configure):
+
+- **On demand (default).** Every few minutes (default 2) and for each arm or disarm, Home
+  Assistant opens a short session, reads the panel state, says goodbye and disconnects. The panel
+  allows **one remote session at a time**, so the HomeControl2 app is blocked only for those few
+  seconds.
+- **Persistent ("live updates").** Keeps one session open for instant input and area changes, and
+  reconnects with back-off. **While it is connected, the HomeControl2 app cannot log in.**
+
+Planned: output switches, input omit, the event log and PIR-camera photos.
+
+## Installation
+
+1. In HACS, add this repository as a custom repository (category *Integration*) and install
+   **Pyronix Cloud**. HACS installs the `pyronix-cloud` library from PyPI.
+2. Restart Home Assistant (2026.2 or later).
+3. Add the **Pyronix Cloud** integration and enter the details below.
 
 ## What you need
 
@@ -53,22 +71,28 @@ The same details HomeControl2 uses. Each one is listed with its label in the app
 ```
 PROTOCOL.md                 Reverse-engineered protocol specification
 probe/                      Stand-alone read-only protocol test script (step 1)
-src/pyronix_cloud/          Async client library, no HA dependency (planned)
-custom_components/pyronix_cloud/   Home Assistant integration (planned)
-tests/                      Library and integration tests (planned)
+src/pyronix_cloud/          Async client library, no HA dependency (published as pyronix-cloud)
+src/pyronix_cloud/testing/  Fake cloud relay + panel for offline tests and dev instances
+custom_components/pyronix_cloud/   Home Assistant integration
+tests/                      Library tests; tests/integration/ holds the HA tests
 apk/, decompiled/           Local-only reverse-engineering inputs (gitignored, never committed)
 ```
 
 ## Roadmap
 
-1. **Probe** (`probe/`). Connect, handshake, log in and dump the panel JSON. Read-only. Answers
-   the open questions in PROTOCOL.md §13.
-2. **Library** (`pyronix_cloud`). An asyncio client with a persistent connection, reconnect with
-   back-off, heartbeats, typed models for each JSON `type`, a command API and a fake panel for
-   tests.
-3. **Integration.** Config flow, a DataUpdateCoordinator driven by pushed panel data, entities,
-   diagnostics with redaction, and translations.
-4. **Distribution.** HACS-compatible repository; library optionally published to PyPI.
+1. ~~Probe~~: done; read-only live sessions answered most of PROTOCOL.md §13.
+2. ~~Library~~ and ~~integration~~: first version done, tested offline.
+3. Confirm a real set/unset sequence on a live panel (§13 Q12), then outputs, omit and the log.
+4. Publish `pyronix-cloud` to PyPI, list in HACS, submit brand images; later, HA core.
+
+## Developing against the fake panel
+
+```bash
+uv run python -m pyronix_cloud.testing --port 8765
+```
+
+This serves a fake cloud relay and panel on `ws://127.0.0.1:8765` and prints its test
+credentials. In the config flow, open **Advanced** and set the cloud relay URL to it.
 
 ## Trying the probe
 
