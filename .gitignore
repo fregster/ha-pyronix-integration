@@ -1,0 +1,17 @@
+# Pyronix HomeControl2 APKs: large, third-party copyrighted binaries; never commit
+/apk/
+/decompiled/
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# Probe: generated stable device ID
+/probe/.device_id
+/probe/*.log

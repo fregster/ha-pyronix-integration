@@ -1,0 +1,4 @@
+websockets>=13
+cryptography>=42
+python-dotenv>=1.0
+pytest>=8
