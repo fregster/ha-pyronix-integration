@@ -11,7 +11,7 @@ Reverse-engineered from the Android app to enable a Home Assistant integration.
 | App identity sent to cloud | `AppVersion "6.03.001"`, `AppType 16`, `OSName "Android"` |
 | Supported products (per library) | `"HomeControl+ Enforcer,Euro 46 App"` |
 | Date of analysis | 2026-11-04 |
-| Method | Static analysis only (jadx 1.5.6). **No traffic has been captured and no connection has been attempted.** |
+| Method | Static analysis (jadx 1.5.6), then read-only live sessions with `probe/` against a Euro 46 V10.26 (2026-11-04). Live findings are labelled **Observed (live)**. |
 | Revised | 2026-11-04: corrected after a line-by-line port to Python (`probe/`) against the Java. Places where the app's code has bugs are marked **App bug**. |
 
 All source paths below are relative to `decompiled/sources/` (gitignored; regenerate with
@@ -184,7 +184,14 @@ Every message has the same envelope:
 - Command letter = `message.substring(3, 4)` (the character after `<e>`).
 - Data = `message.substring(5, len - 4)`. One character after the command letter is skipped, and
   the trailing `</e>` is stripped.
-- So the shape is `<e>{C}{sep}{DATA}</e>`. **Unknown:** the separator character.
+- So the shape is `<e>{C}{sep}{DATA}</e>`.
+- **Observed (live, 2026-11-04):**
+  - The separator is a space. The cloud answers `MSG_SUBSCRIPTION` with `<e>j </e>` (letter `j`
+    directly, not `w`), sometimes with data after the space. Treat `j` data as secret: in one run
+    the probe's redactor matched it against a configured secret.
+  - `u` arrives as `<e>u</e>`: 8 characters, no separator, no data. The app's
+    `substring(5, len-4)` would throw on it, so parse from the `<e>` position and tolerate short
+    forms.
 - **Observed:** parsing is purely positional. `getDataFromXml` is `substring(5, len-4)`
   (`HomeControl.java:791`), which throws for replies shorter than 9 characters. **Inferred:**
   `w`/`m`/`j` replies therefore always carry at least one data character.
@@ -215,6 +222,12 @@ Every message has the same envelope:
 
 **Heartbeat:** any 1-character message from the cloud (normally `" "`) makes the app send an
 encrypted panel heartbeat, opcode `0x20` (`HomeControl.java:508-512`).
+
+- **Observed (live):** the cloud heartbeat is exactly `" "`, about every 51 s; the panel answers
+  the `0x20` with a `d` frame holding `" "`.
+- Because frames can be split across WebSocket messages (§4.2), a 1-character message such as a
+  split-off `)` is frame data. Only a single whitespace character is a heartbeat. The app's
+  length test is a latent bug.
 
 **No-reply timer:** `cloudNoReplyTimer = 300` seconds (`HomeControl.java:255`). It is armed on
 connect and cancelled on every received message. On expiry it calls `noReplyFromCloud()`
@@ -273,6 +286,14 @@ the 16-byte check**. Bytes 0–4 (the header) are always in the clear.
   - The raw length is read from signed bytes (`:1137`).
   - **Inferred:** in practice the cloud delivers panel frames as `(base64)` text. Clients should
     implement both forms correctly and log which one arrives.
+- **Observed (live, 2026-11-04):** every panel frame arrived as `(base64)` text. The cloud does
+  not align frames with WebSocket messages:
+  - one message can carry several frames: `(…)(…)`;
+  - one frame can be split across two messages: `…tL)(ZAQ…`;
+  - a message can start with a space: ` (YQE…)`.
+
+  A receiver must buffer across messages. Each `d` frame carried exactly one complete JSON
+  document.
 
 ### 4.3 Sequence numbers
 
@@ -353,6 +374,14 @@ with `CharsKt.digitToIntOrNull(c)` with **no radix**, which means radix 10. As a
 - Only the first 32 characters affect the 16-byte key.
 
 Copy this exactly. A real hex decode gives a different key.
+
+Further Java details that a port must copy (found while porting, 2026-11-04):
+
+- `length()` and `charAt` count UTF-16 code units, so a password with characters outside the
+  BMP (e.g. emoji) reaches the 32+ branch sooner than a character count suggests.
+- `digitToIntOrNull()` accepts any Unicode decimal digit (e.g. `٣` counts as 3), not only
+  `0`–`9`.
+- In the short branch, `getBytes(UTF_8)` turns a lone surrogate into `?`.
 
 ### 4.6 Uplink / modem type from the announce (`p[1]`)
 
@@ -465,12 +494,28 @@ one-letter names showed up in jadx as unrelated library constants; they resolve 
 | `output` | `parseAutomatedControls` | `AutomatedControlsData` |
 | `user` | `parseUser` | `OcpUserModel` |
 | `fault` | `parseFaults` | `OcpFaultsModel` |
+| `applevel` | not handled by the app | — |
+
+**Observed (live, 2026-11-04):**
+
+- The login dump arrives about 1 s after login, in this order: `panel`, `applevel`, `area` ×3
+  (two areas per page), `fault`, `input` pages, `output`, `user`. `user` was always last, so a
+  client can treat it as "dump complete".
+- `applevel` looks like `{"type":"applevel","level":1,"lang":"GB","panel":"Rev V10.26c …"}`.
+  Its meaning is **unknown**; clients should ignore unknown types.
+- String fields are space-padded: `SiteName` and `L` are often `" "`, and names can carry
+  trailing spaces. Trim them.
+- `00/00/00 00:00:00` means "never". The app's `DateAdapter` would turn it into "now".
 
 ### 6.2 `panel` — panel information (`ocp_about/data/models/PanelInfoModel.java`)
 
 ```json
-{"type":"panel","SiteName":"Home","VersionHi":10,"VersionLo":5,"Panel":"12345678","Areas":4,"Inputs":32,"Outputs":8}
+{"type":"panel","Panel":"ABCDEFGH","SiteName":" ","Areas":6,"Inputs":76,"Outputs":30,"VersionHi":10,"VersionLo":26,"Options":1}
 ```
+
+(Live shape, identifiers replaced.) `Areas`, `Inputs` and `Outputs` are the panel's
+**capacity**: this panel reported 76 inputs but sent 10–15 configured ones. `Options` is
+**unknown**.
 
 | Key | Type | Meaning |
 |---|---|---|
@@ -497,12 +542,12 @@ one-letter names showed up in jadx as unrelated library constants; they resolve 
 | `Areas` | int | **Observed:** the number of entries in *this* document, not the panel total. The dump is paged two areas per document (A+B, C+D, 0+1). An update carries one area. Use `panel.Areas` for the total. |
 | `SetType` | enum `SetType` | `Level` or `Area` — how the panel sets (by levels or by areas). Persisted by the app. **Observed:** sent as the string `"Level"` on a panel with "Use Level Set" enabled |
 | `Detail[].S` | string | **Observed:** display text for the state, e.g. `"Unset"`, `"Set Delayed"`, `"Cannot Set"`. Not authoritative. Use `V`. |
-| `Detail[].R` | int | Area ID; this is the value used in set/unset commands |
+| `Detail[].R` | int | Area ID; this is the value used in set/unset commands. **Observed:** starts at **0** (A = 0, B = 1, …) |
 | `Detail[].C` | char | Area letter (A, B, C …) |
 | `Detail[].N` | string | Area name |
 | `Detail[].V` | int → `OcpAreaStatus` | 0 Unset, 1 Set, 2 Alarmed, 3 Setting, 4 CannotSet, 5 CanOverride, 6 SetCancelled |
 | `Detail[].LastSet` / `LastUnSet` | `{U: user, D: date}` | Last set / unset, with user and time |
-| `Detail[].Faults` | `{Q: count, List: [{I: text}]}` | Faults that block setting this area |
+| `Detail[].Faults` | `{Q: count, List: [{I: text}]}` | Faults that block setting this area. **Observed:** often `{"Q":0}` with no `List`, or absent |
 
 **Observed (Euro 46 V10.26, 2026-11-04), with nobody setting the panel:** when an input in area A
 opened, the panel pushed area A with `V:5` (CanOverride), `S:"Set Delayed"` and
@@ -536,14 +581,15 @@ armed mode is chosen by the level (e.g. A → away, B → night, C → custom), 
 |---|---|---|
 | `isnew` | bool/int | Full list vs. update. The library also sees it as int `1` (`HomeControl.java:999`) |
 | `Inputs` | int | Input count |
-| `Detail[].R` | int | Input number; used for omit commands |
+| `Detail[].R` | int | Input number; used for omit commands. **Observed:** starts at 0 |
+| `Detail[].T` | string | **Observed:** input type text, e.g. `"Intruder"`, `"Final Exit"`, `"Fire"`, `"ER (Area FX)"` |
 | `Detail[].C` | int? | `isPIRCam` — set if the input is a PIR camera, which supports take-photo |
 | `Detail[].N` | string | Input name |
 | `Detail[].L` | string | Location |
 | `Detail[].A` | `{Q: count, R: [areaIds]}` | Areas this input belongs to |
 | `Detail[].V` | int → `OcpInput.State` | 0 Closed, 1 Open, 2 Problem |
-| `Detail[].O` | bool | Can be omitted (bypassed) |
-| `Detail[].B` | bool | Currently omitted (bypassed) |
+| `Detail[].O` | bool | Can be omitted (bypassed). **Observed:** sent as int `0`/`1` |
+| `Detail[].B` | bool | Currently omitted (bypassed). **Observed:** sent as int `0`/`1` |
 | `Detail[].S` | string | Free-text status |
 
 **Inferred:** large input lists may arrive in several messages. The library collects `Detail`
@@ -578,13 +624,17 @@ entries into `completeInputArray` across messages when `isnew == 1`
 {"type":"user","U":"Paul","SetAreas":{"Q":2,"R":[1,2]},"UnsetAreas":{"Q":2,"R":[1,2]}}
 ```
 
-This shows which areas the logged-in user code may set or unset.
+This shows which areas the logged-in user code may set or unset. **Observed (live):** it also
+carries `"Flexiset":1` (meaning **unknown**), and its area numbers are the 0-based `R` values.
 
 ### 6.8 `fault` — panel faults (`OcpFaultsModel.java`, `FaultDetailModel.java`)
 
 ```json
 {"type":"fault","Faults":1,"Detail":[{"I":"Mains fail","A":{"Q":1,"R":[1]}}]}
 ```
+
+Here `Faults` is a count (int). Inside an area entry, `Faults` is an object (§6.3): the same
+key has two shapes.
 
 ### 6.9 Upload of input/user JSON to the cloud (`sendPanelJSONToCloud`, `HomeControl.java:989-1085`)
 
@@ -737,7 +787,9 @@ libraries (arm64 split):
 
 ## 11. Reference implementation notes (Python)
 
-The sketch below follows §4. It is untested against a real panel. **Superseded by
+The sketch below follows §4. It is untested against a real panel. It also packs the type with
+`<IIII`, which fails for type bytes ≥ 0x80 where Java sign-extends; harmless for the ASCII
+types used. **Superseded by
 `probe/pyronix_probe.py`**, which is tested offline against a port of the Java. Use the probe as
 the reference.
 
@@ -842,7 +894,7 @@ b_payload = b"\x01" + pub
 | # | Question | How to resolve |
 |---|---|---|
 | 1 | ~~Does the cloud validate `PushId` / `DeviceId` / `AppUser`?~~ **Answered (2026-11-04):** a dummy `PushId`, a random `DeviceId` and a new `AppUser` were all accepted at once | — |
-| 2 | Separator character in `<e>{C}?{data}</e>`; content of the `w`/`m`/`j` data | Capture |
+| 2 | ~~Separator character in `<e>{C}?{data}</e>`~~ **Answered (2026-11-04):** a space (`<e>j </e>`); `u` has none (`<e>u</e>`). Still open: meaning of the `j` data | Capture |
 | 3 | ~~Is `AppUser` the account e-mail or a panel-side user name?~~ **Resolved:** it is the app's free-text "Device name" (§2). It is still **unknown** whether the cloud or panel checks it against anything. | Capture |
 | 4 | ~~Wire encoding of `SetType`~~ **Answered:** the string `"Level"` | — |
 | 5 | ~~Does the panel push changes spontaneously?~~ **Answered:** yes. Input and area changes arrive as `isnew:0` documents within ~1 s | — |
@@ -853,6 +905,7 @@ b_payload = b"\x01" + pub
 | 10 | Is a separate cloud "subscription" (`i` = expired) needed for app access? | Pyronix account terms |
 | 11 | **Session exclusivity.** Observed: while the probe was connected (as a separate panel user), the phone app could not log in; it got in at once after the probe disconnected. A probe started while the app was logged in connected fine. **Unknown:** whether that dropped the app (newest wins) or the app had released the slot | Watch the app during a probe run |
 | 12 | What a real set looks like: `V` sequence through exit delay to Set, and with Final Door exit mode | Capture while setting from the app |
+| 13 | What the panel does when the login `D` frame was encrypted with a wrong app password (key mismatch): `c` NACKs, `e`, or silence? The library maps both "no `d` frame ever verifies" and "our login is NACKed to the limit" to an authentication error | Capture with a deliberately wrong app password (costs a failed login; ask first) |
 
 The cheapest way to answer most of these is to run the real app on a physical Android phone with a
 debug build of `kotlinlibhomecontrol` logging. Alternatively, read `logcat`: the library prints
