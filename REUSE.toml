@@ -16,9 +16,10 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Paul Fryer"
 SPDX-License-Identifier = "LGPL-3.0-or-later"
 
-# The Home Assistant integration is Apache-2.0 so it can move to HA core unchanged.
+# The Home Assistant integration and its tests are Apache-2.0 so they can move to HA
+# core unchanged.
 [[annotations]]
-path = ["custom_components/**", "hacs.json"]
+path = ["custom_components/**", "hacs.json", "tests/integration/**"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Paul Fryer"
 SPDX-License-Identifier = "Apache-2.0"

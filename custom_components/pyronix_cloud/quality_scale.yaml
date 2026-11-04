@@ -1,0 +1,115 @@
+rules:
+  # Bronze
+  action-setup:
+    status: exempt
+    comment: This integration does not register any service actions of its own.
+  appropriate-polling: done
+  brands:
+    status: todo
+    comment: Brand images are not submitted yet (README roadmap step 4).
+  common-modules: done
+  config-flow-test-coverage: done
+  config-flow: done
+  dependency-transparency:
+    status: todo
+    comment: |
+      pyronix-cloud lives in this repository (src/) under an OSI licence but is
+      not published to PyPI with a tagged CI release yet (README roadmap step 4).
+  docs-actions:
+    status: exempt
+    comment: This integration does not register any service actions of its own.
+  docs-conditions:
+    status: exempt
+    comment: This integration does not provide any conditions.
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions:
+    status: todo
+    comment: The README does not explain how to remove the integration yet.
+  docs-triggers:
+    status: exempt
+    comment: This integration does not provide any triggers.
+  entity-event-setup:
+    status: exempt
+    comment: |
+      Entities do not subscribe to events; they read the coordinator. The only
+      extra listener (new inputs) is set up in async_setup_entry and removed
+      with entry.async_on_unload.
+  entity-unique-id: done
+  has-entity-name: done
+  runtime-data: done
+  test-before-configure: done
+  test-before-setup: done
+  unique-config-entry: done
+
+  # Silver
+  action-exceptions: done
+  config-entry-unloading: done
+  docs-configuration-parameters:
+    status: todo
+    comment: |
+      The README describes both options (connection mode, poll interval) but
+      not the poll interval's 1 to 60 minute range or the options dialog.
+  docs-installation-parameters: done
+  entity-unavailable: done
+  integration-owner: done
+  log-when-unavailable: done
+  parallel-updates: done
+  reauthentication-flow: done
+  test-coverage: done
+
+  # Gold
+  devices: done
+  diagnostics: done
+  discovery-update-info:
+    status: exempt
+    comment: The panel is reached only through the Pyronix Cloud; nothing to discover.
+  discovery:
+    status: exempt
+    comment: |
+      The panel is reached only through the Pyronix Cloud relay by System ID;
+      it does not announce itself on the local network.
+  docs-data-update: done
+  docs-examples:
+    status: todo
+    comment: The README has no automation examples yet.
+  docs-known-limitations:
+    status: todo
+    comment: |
+      Limitations (one remote session, untested arming on a real panel) are
+      mentioned in the README but not collected in a known-limitations section.
+  docs-supported-devices: done
+  docs-supported-functions: done
+  docs-troubleshooting:
+    status: todo
+    comment: The README has no troubleshooting section yet.
+  docs-use-cases:
+    status: todo
+    comment: The README has no use-case section yet.
+  dynamic-devices:
+    status: done
+    comment: |
+      The panel is one device; inputs that appear in a later snapshot get
+      binary sensors added at runtime (tested in test_binary_sensor.py).
+  entity-category: done
+  entity-device-class: done
+  entity-disabled-by-default: done
+  entity-translations: done
+  exception-translations: done
+  icon-translations: done
+  reconfiguration-flow: done
+  repair-issues:
+    status: exempt
+    comment: |
+      The only user-fixable failure is rejected credentials, which starts the
+      reauthentication flow instead of raising a repair issue.
+  stale-devices:
+    status: exempt
+    comment: |
+      The integration has a single device, the panel. Input entities the panel
+      no longer reports are not removed automatically (follow-up).
+
+  # Platinum
+  async-dependency: done
+  inject-websession: done
+  strict-typing: done

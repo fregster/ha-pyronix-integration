@@ -1,0 +1,144 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to your Pyronix panel",
+        "description": "Enter the details you use in the HomeControl2 app. Home Assistant checks them with one short, read-only session through the Pyronix Cloud.",
+        "data": {
+          "app_user": "Device name",
+          "panel_id": "System ID",
+          "app_password": "App password",
+          "user_code": "User code"
+        },
+        "data_description": {
+          "app_user": "The name the panel's event log shows for Home Assistant.",
+          "panel_id": "The 8-character System ID you entered when you added the panel to the app.",
+          "app_password": "The app password your installer set on the panel.",
+          "user_code": "Your keypad user code. Home Assistant arms and disarms with this user's rights."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Advanced options",
+            "description": "Leave these alone unless you are testing against a fake or test relay.",
+            "data": {
+              "cloud_url": "Cloud relay URL"
+            },
+            "data_description": {
+              "cloud_url": "Use wss://, or ws:// only for localhost or 127.0.0.1."
+            }
+          }
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-enter the panel login details",
+        "description": "The panel rejected the stored app password or user code. Enter them again.",
+        "data": {
+          "app_password": "App password",
+          "user_code": "User code"
+        },
+        "data_description": {
+          "app_password": "The app password your installer set on the panel.",
+          "user_code": "Your keypad user code."
+        }
+      },
+      "reconfigure": {
+        "title": "Change the panel login details",
+        "description": "The System ID cannot change. To use another panel, add a new entry.",
+        "data": {
+          "app_user": "Device name",
+          "app_password": "App password",
+          "user_code": "User code"
+        },
+        "data_description": {
+          "app_user": "The name the panel's event log shows for Home Assistant.",
+          "app_password": "The app password your installer set on the panel.",
+          "user_code": "Your keypad user code."
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "The panel rejected the System ID, app password or user code.",
+      "panel_busy": "The panel is busy with another remote session, such as the HomeControl2 app. Close it and try again.",
+      "panel_offline": "The panel is not connected to the Pyronix Cloud.",
+      "subscription_expired": "The panel's Pyronix Cloud subscription has expired.",
+      "cannot_connect": "Failed to connect to the Pyronix Cloud.",
+      "unknown": "Unexpected error.",
+      "invalid_system_id": "The System ID must be exactly 8 characters.",
+      "invalid_url": "Use a wss:// URL, or ws:// only for localhost or 127.0.0.1.",
+      "invalid_user_code": "The user code must be 1 to 8 digits.",
+      "invalid_characters": "This field must not contain <, > or &."
+    },
+    "abort": {
+      "already_configured": "This panel is already configured.",
+      "reauth_successful": "Re-authentication was successful.",
+      "reconfigure_successful": "Re-configuration was successful.",
+      "unique_id_mismatch": "These details reach a different panel. Add it as a new entry instead."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Pyronix Cloud options",
+        "description": "Warning: persistent mode keeps the panel's single remote session busy all the time, which locks out the HomeControl2 app. Use on-demand mode if you still need the app.",
+        "data": {
+          "mode": "Connection mode",
+          "scan_interval": "Poll interval"
+        },
+        "data_description": {
+          "mode": "On-demand opens a short session for each poll and each command. Persistent keeps one session open and receives changes as they happen.",
+          "scan_interval": "Minutes between polls in on-demand mode (1 to 60)."
+        }
+      }
+    }
+  },
+  "selector": {
+    "mode": {
+      "options": {
+        "on_demand": "On-demand (recommended)",
+        "persistent": "Persistent (live updates, locks out the app)"
+      }
+    }
+  },
+  "exceptions": {
+    "auth_failed": {
+      "message": "The panel rejected the stored credentials. Re-authenticate the integration."
+    },
+    "update_failed": {
+      "message": "Failed to read the panel state ({error})."
+    },
+    "not_connected": {
+      "message": "The panel session is not connected; try again after it reconnects."
+    },
+    "not_permitted": {
+      "message": "The user code is not allowed to set or unset these areas."
+    },
+    "command_not_confirmed": {
+      "message": "The panel did not confirm the command in time."
+    },
+    "panel_busy": {
+      "message": "The panel is busy with another remote session, such as the HomeControl2 app."
+    },
+    "command_failed": {
+      "message": "The panel command failed ({error})."
+    },
+    "mode_not_supported": {
+      "message": "This arm mode is not available: its level is not in use, or the user code may not set it."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "connection_state": {
+        "name": "Connection state",
+        "state": {
+          "idle": "Idle",
+          "connecting": "Connecting",
+          "connected": "Connected",
+          "error": "Error"
+        }
+      },
+      "faults": {
+        "name": "Faults"
+      }
+    }
+  }
+}
