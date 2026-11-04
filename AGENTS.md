@@ -109,6 +109,7 @@ uv run python probe/pyronix_probe.py --dry-run
 | Secrets | `gitleaks`, `detect-private-key` | no codes, System IDs or keys in git history |
 | Licences | `reuse lint` | every file has SPDX info (header or `REUSE.toml`) |
 | Spelling | `codespell` | |
+| File size | `tools/check_module_size.py` | line budgets per path; see *File focus* below |
 
 - **No silencing without a reason.** `# noqa: CODE` and `# type: ignore[code]` need the rule
   code and a short comment saying why. Prefer fixing the design: table-driven parsers and small
@@ -123,6 +124,33 @@ uv run python probe/pyronix_probe.py --dry-run
   move to HA core unchanged. New source files start with the two SPDX header lines.
 - **Distribution:** HACS first. Keep the HA core route open: library publishable to PyPI,
   integration written to the Platinum level of the HA Integration Quality Scale.
+
+## File focus (one file, one job)
+
+Each module has **one responsibility**, and you can say what it is in one sentence. This keeps
+files easy to review, test and hand to an agent with limited context.
+
+- **The module docstring's first line states that responsibility**, e.g. `"""AES-CFB-128
+  encryption and decryption for panel frames."""`. If the sentence needs "and" to join two
+  unrelated jobs, the module needs splitting.
+- **Read the docstring before adding code.** If the new code does not fit the stated job, put it
+  in the module whose job it does fit, or create a new focused module. Never widen a docstring to
+  make room.
+- **Line budgets** (`[tool.module-size]` in `pyproject.toml`, checked by
+  `tools/check_module_size.py` in pre-commit and CI): **300** lines for `src/` and
+  `custom_components/`, **500** for `tests/`, **200** for `tools/`; `probe/` is exempt. Over
+  budget means *split by responsibility*. Do not raise the limit, and do not squeeze code to fit
+  (fewer blank lines, longer lines, dropped docstrings).
+- **Split early.** Once a module passes ~80 % of its budget, plan the split before adding more.
+- **No dumping grounds.** No `utils.py`, `helpers.py`, `common.py` or `misc.py`. Name modules
+  after what they do (`frames.py`, `crypto.py`).
+- **One test module per source module** (`tests/test_<module>.py`), split further by behaviour if
+  it grows. Shared fixtures go in `conftest.py`.
+- **Agents: keep each change to one concern.** Don't refactor unrelated code in passing; list it
+  as a follow-up instead. When you create a module, state its responsibility in the docstring
+  first, then write the code.
+
+## Working practices
 
 - Write or extend offline tests **before** changing protocol code. Port Java logic line for line
   in tests when you need to prove equivalence (as was done for CFB).

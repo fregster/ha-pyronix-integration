@@ -8,7 +8,7 @@ version = 1
 # Library, protocol documentation, research probe and tooling.
 [[annotations]]
 path = [
-    "README.md", "PROTOCOL.md", "AGENTS.md", ".env.example", ".gitignore",
+    "README.md", "PROTOCOL.md", "AGENTS.md", "CLAUDE.md", ".env.example", ".gitignore",
     ".editorconfig", ".pre-commit-config.yaml", ".github/**", "uv.lock",
     "probe/**", "src/pyronix_cloud/py.typed",
 ]
