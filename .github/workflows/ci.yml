@@ -17,8 +17,8 @@ jobs:
     name: Lint, format, types, licences
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
         with:
           python-version: "3.13"
       - run: uv sync --frozen
@@ -34,12 +34,18 @@ jobs:
     name: Secret scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
+      # The gitleaks CLI scans the full history. gitleaks-action is not used because it
+      # breaks on a branch's first push (empty "before" SHA). Keep the version in step
+      # with the pre-commit hook.
+      - name: Scan full history with gitleaks
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: "8.30.0"
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
+          ./gitleaks git --redact --no-banner --exit-code 1 .
 
   test:
     name: Tests (Python ${{ matrix.python }})
@@ -49,8 +55,8 @@ jobs:
       matrix:
         python: ["3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
         with:
           python-version: ${{ matrix.python }}
       - run: uv sync --frozen
