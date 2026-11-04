@@ -60,6 +60,30 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: uv sync --frozen
+      # Library + integration tests. Coverage gates: >= 95 % overall (pyproject) and
+      # 100 % for the config flow (Integration Quality Scale, checked below).
       - run: uv run pytest
+      - name: Config flow coverage must be 100 %
+        run: uv run coverage report --include='custom_components/pyronix_cloud/config_flow.py' --fail-under=100
       # The research probe keeps its own offline tests; they must stay green too.
       - run: uv run pytest probe -p no:cacheprovider --no-cov -o addopts=""
+
+  hassfest:
+    name: hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # home-assistant/actions publishes no release tags for hassfest; pin the commit.
+      - uses: home-assistant/actions/hassfest@86d4564712fa02543c808e3a693dd04f9d3f8361 # master 2026-10-26
+
+  hacs:
+    name: HACS validation
+    runs-on: ubuntu-latest
+    steps:
+      # hacs/action's last tag is from 2022 and its docs point at main; pin the commit.
+      - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa # main 2026-06-08
+        with:
+          category: integration
+          comment: false
+          # Brand images live in home-assistant/brands, submitted after the first release.
+          ignore: brands
