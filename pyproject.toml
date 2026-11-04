@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pyronix-cloud"
-version = "0.0.0"
+version = "0.1.0"
 description = "Async client for Pyronix panels via the Pyronix Cloud (HomeControl2) relay"
 readme = "README.md"
 license = "LGPL-3.0-or-later"
@@ -34,6 +34,7 @@ dev = [
     { include-group = "lint" },
     { include-group = "test" },
     { include-group = "probe" },
+    { include-group = "ha" },
     "pre-commit>=4",
 ]
 lint = [
@@ -48,6 +49,13 @@ test = [
     "pytest-cov>=6",
     "hypothesis>=6.130",
 ]
+# Home Assistant test harness for custom_components/. HA dropped Python 3.13 in
+# 2026.3, so 3.13 tests run against HA 2026.2.3 (the last release that supports it)
+# and 3.14 tests against a current HA. Bump both pins deliberately, never float them.
+ha = [
+    "pytest-homeassistant-custom-component==0.13.316; python_full_version >= '3.13.2' and python_version < '3.14'",
+    "pytest-homeassistant-custom-component==0.13.375; python_full_version >= '3.14.2'",
+]
 # Dependencies of the stand-alone research probe (probe/), not of the library.
 probe = [
     "websockets>=13",
@@ -57,11 +65,22 @@ probe = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/pyronix_cloud"]
 
+# The sdist carries the library only; the HA integration ships through HACS.
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/pyronix_cloud",
+    "tests/*.py",
+    "LICENSES/LGPL-3.0-or-later.txt",
+    "COPYING",
+    "README.md",
+    "PROTOCOL.md",
+]
+
 # --------------------------------------------------------------------------- ruff
 [tool.ruff]
 line-length = 88
 target-version = "py313"
-src = ["src", "tests", "tools"]
+src = ["src", "tests", "tools", "."]
 # The probe is a frozen research tool: linted with a relaxed profile (below), but
 # not reformatted. Its logic is ported into src/ properly rather than polished.
 extend-exclude = ["decompiled", "apk"]
@@ -121,14 +140,19 @@ fixture-parentheses = false
 mark-parentheses = false
 
 [tool.ruff.lint.isort]
-known-first-party = ["pyronix_cloud"]
+known-first-party = ["pyronix_cloud", "custom_components"]
 force-sort-within-sections = true
 
 # --------------------------------------------------------------------------- mypy
 [tool.mypy]
-python_version = "3.13"
+# No python_version: mypy checks against the running interpreter, so CI's 3.13 job checks
+# 3.13 compatibility and a 3.14 venv can still read HA 2026.10's 3.14-only syntax.
 strict = true
-files = ["src", "tests", "tools"]
+# custom_components/ has no __init__.py, so name modules by path to keep the integration
+# package apart from the library package of the same name.
+explicit_package_bases = true
+mypy_path = ["src", "tools"]
+files = ["src", "tests", "tools", "custom_components"]
 warn_unreachable = true
 enable_error_code = [
     "ignore-without-code",
@@ -142,21 +166,30 @@ enable_error_code = [
 # --------------------------------------------------------------------------- pytest
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The repository root holds custom_components/ for the integration tests.
+pythonpath = ["."]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = [
     "--strict-markers",
     "--strict-config",
     "--cov=pyronix_cloud",
+    "--cov=custom_components.pyronix_cloud",
     "--cov-branch",
     "--cov-report=term-missing:skip-covered",
 ]
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # False positive inside Hypothesis itself (entropy.deterministic_PRNG registers its
+    # own thread-local Random, which the refcount heuristic misjudges once the HA test
+    # plugin is loaded). Not caused by our code; remove when Hypothesis fixes it.
+    "ignore:It looks like `register_random` was passed an object:hypothesis.errors.HypothesisWarning",
+]
 xfail_strict = true
 
 [tool.coverage.run]
 branch = true
-source = ["pyronix_cloud"]
+source = ["pyronix_cloud", "custom_components.pyronix_cloud"]
 
 [tool.coverage.report]
 fail_under = 95
@@ -171,7 +204,7 @@ exclude_also = [
 # --------------------------------------------------------------------------- codespell
 [tool.codespell]
 skip = "./decompiled,./apk,./.venv,./LICENSES,uv.lock,*.log"
-ignore-words-list = "omitt,ser,inout"
+ignore-words-list = "omitt,ser,inout,hass"
 
 # --------------------------------------------------------------------------- module size
 # Enforced by tools/check_module_size.py (pre-commit + CI). Files must stay single-focused:
