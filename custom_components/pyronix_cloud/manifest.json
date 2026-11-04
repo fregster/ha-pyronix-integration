@@ -1,0 +1,13 @@
+{
+  "domain": "pyronix_cloud",
+  "name": "Pyronix Cloud",
+  "codeowners": ["@fregster"],
+  "config_flow": true,
+  "documentation": "https://github.com/fregster/ha-pyronix-intergration",
+  "integration_type": "device",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/fregster/ha-pyronix-intergration/issues",
+  "loggers": ["pyronix_cloud"],
+  "requirements": ["pyronix-cloud==0.1.0"],
+  "version": "0.1.0"
+}
