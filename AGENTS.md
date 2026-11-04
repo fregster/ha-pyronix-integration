@@ -89,11 +89,40 @@ pyronix_cloud (library)
 ## Workflow
 
 ```bash
-uv venv && source .venv/bin/activate
-uv pip install -r probe/requirements.txt pytest
-pytest probe/                  # offline tests, no network
-python probe/pyronix_probe.py --dry-run
+uv sync                                   # create .venv from uv.lock (Python >= 3.13)
+uv run pre-commit install                 # once per clone
+uv run pre-commit run --all-files         # every gate below, as CI runs them
+uv run pytest                             # library tests + coverage gate
+uv run pytest probe --no-cov -o addopts=""   # probe's offline tests, no network
+uv run python probe/pyronix_probe.py --dry-run
 ```
+
+## Quality gates (all enforced in pre-commit and CI; a red gate blocks the merge)
+
+| Gate | Tool | Rule |
+|---|---|---|
+| Lint | `ruff check` | `select = ["ALL"]`; every ignore in `pyproject.toml` carries a reason |
+| Format | `ruff format` | line length **88**, Google-style docstrings on public API |
+| Complexity | ruff `C901`, `PLR09xx` | complexity ≤ 10, branches ≤ 12, returns ≤ 6, args ≤ 5, statements ≤ 50 |
+| Types | `mypy --strict` | plus `warn_unreachable` and extra error codes; library ships `py.typed` |
+| Tests | `pytest`, `pytest-cov`, `hypothesis` | branch coverage ≥ 95 % for the library; 100 % for `config_flow.py` |
+| Secrets | `gitleaks`, `detect-private-key` | no codes, System IDs or keys in git history |
+| Licences | `reuse lint` | every file has SPDX info (header or `REUSE.toml`) |
+| Spelling | `codespell` | |
+
+- **No silencing without a reason.** `# noqa: CODE` and `# type: ignore[code]` need the rule
+  code and a short comment saying why. Prefer fixing the design: table-driven parsers and small
+  functions keep within the complexity limits.
+- **Untrusted input is parsed at the boundary.** Panel JSON and frames become typed dataclasses
+  in one place; nothing downstream sees raw `dict[str, Any]`. Frame parsing gets hypothesis
+  property tests.
+- **`probe/` is exempt from formatting and most lint rules.** It is a frozen research tool;
+  port its logic into `src/` properly instead of polishing it.
+- **Licensing:** `src/`, `tests/`, `probe/` and docs are **LGPL-3.0-or-later** (GPL text in
+  `COPYING`); `custom_components/` and `hacs.json` are **Apache-2.0**, so the integration can
+  move to HA core unchanged. New source files start with the two SPDX header lines.
+- **Distribution:** HACS first. Keep the HA core route open: library publishable to PyPI,
+  integration written to the Platinum level of the HA Integration Quality Scale.
 
 - Write or extend offline tests **before** changing protocol code. Port Java logic line for line
   in tests when you need to prove equivalence (as was done for CFB).

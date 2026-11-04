@@ -13,7 +13,7 @@ request `0x35`. There is no code for arm, disarm, omit or output opcodes, and
 
 ```sh
 cd /Users/pfrye/git/ha-pyronix-intergration
-uv venv .venv && uv pip install -p .venv/bin/python -r probe/requirements.txt
+uv sync    # project env incl. the probe dependency group (or: pip install -r probe/requirements.txt)
 ```
 
 ## Configure
