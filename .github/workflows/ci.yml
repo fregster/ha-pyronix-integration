@@ -27,6 +27,8 @@ jobs:
       - run: uv run mypy
       - run: uv run codespell
       - run: uv run reuse lint
+      - name: Module size (single-focus files)
+        run: git ls-files '*.py' | xargs uv run python tools/check_module_size.py
 
   secrets:
     name: Secret scan

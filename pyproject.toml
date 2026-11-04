@@ -61,7 +61,7 @@ packages = ["src/pyronix_cloud"]
 [tool.ruff]
 line-length = 88
 target-version = "py313"
-src = ["src", "tests"]
+src = ["src", "tests", "tools"]
 # The probe is a frozen research tool: linted with a relaxed profile (below), but
 # not reformatted. Its logic is ported into src/ properly rather than polished.
 extend-exclude = ["decompiled", "apk"]
@@ -128,7 +128,7 @@ force-sort-within-sections = true
 [tool.mypy]
 python_version = "3.13"
 strict = true
-files = ["src", "tests"]
+files = ["src", "tests", "tools"]
 warn_unreachable = true
 enable_error_code = [
     "ignore-without-code",
@@ -172,3 +172,15 @@ exclude_also = [
 [tool.codespell]
 skip = "./decompiled,./apk,./.venv,./LICENSES,uv.lock,*.log"
 ignore-words-list = "omitt,ser,inout"
+
+# --------------------------------------------------------------------------- module size
+# Enforced by tools/check_module_size.py (pre-commit + CI). Files must stay single-focused:
+# hitting a limit means "split by responsibility", never "raise the limit".
+[tool.module-size]
+default = 300
+rules = [
+    { glob = "tests/**", max = 500 },
+    { glob = "custom_components/**", max = 300 },
+    { glob = "tools/**", max = 200 },
+]
+exclude = ["probe/**", "decompiled/**", "apk/**"]
