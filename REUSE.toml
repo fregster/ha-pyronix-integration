@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: 2026 Paul Fryer
+# SPDX-License-Identifier: LGPL-3.0-or-later
+#
+# Licensing map (https://reuse.software). Source files carry SPDX headers; this file
+# covers everything that cannot (docs, config, data). `reuse lint` enforces it.
+version = 1
+
+# Library, protocol documentation, research probe and tooling.
+[[annotations]]
+path = [
+    "README.md", "PROTOCOL.md", "AGENTS.md", ".env.example", ".gitignore",
+    ".editorconfig", ".pre-commit-config.yaml", ".github/**", "uv.lock",
+    "probe/**", "src/pyronix_cloud/py.typed",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Paul Fryer"
+SPDX-License-Identifier = "LGPL-3.0-or-later"
+
+# The Home Assistant integration is Apache-2.0 so it can move to HA core unchanged.
+[[annotations]]
+path = ["custom_components/**", "hacs.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Paul Fryer"
+SPDX-License-Identifier = "Apache-2.0"

@@ -1,0 +1,174 @@
+# SPDX-FileCopyrightText: 2026 Paul Fryer
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pyronix-cloud"
+version = "0.0.0"
+description = "Async client for Pyronix panels via the Pyronix Cloud (HomeControl2) relay"
+readme = "README.md"
+license = "LGPL-3.0-or-later"
+license-files = ["LICENSES/LGPL-3.0-or-later.txt", "COPYING"]
+authors = [{ name = "Paul Fryer" }]
+requires-python = ">=3.13"
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Home Automation",
+    "Typing :: Typed",
+]
+dependencies = [
+    "aiohttp>=3.11",
+    "cryptography>=44",
+]
+
+[dependency-groups]
+dev = [
+    { include-group = "lint" },
+    { include-group = "test" },
+    { include-group = "probe" },
+    "pre-commit>=4",
+]
+lint = [
+    "ruff==0.17.3",
+    "mypy==1.19.1",
+    "codespell>=2.4",
+    "reuse>=5",
+]
+test = [
+    "pytest>=8.3",
+    "pytest-asyncio>=1.0",
+    "pytest-cov>=6",
+    "hypothesis>=6.130",
+]
+# Dependencies of the stand-alone research probe (probe/), not of the library.
+probe = [
+    "websockets>=13",
+    "python-dotenv>=1.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pyronix_cloud"]
+
+# --------------------------------------------------------------------------- ruff
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+src = ["src", "tests"]
+# The probe is a frozen research tool: linted with a relaxed profile (below), but
+# not reformatted. Its logic is ported into src/ properly rather than polished.
+extend-exclude = ["decompiled", "apk"]
+
+[tool.ruff.format]
+# PROTOCOL.md's Python snippets mirror the Java line by line; keep them as written.
+exclude = ["probe/**", "*.md"]
+docstring-code-format = true
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    # Conflict with `ruff format` (ruff docs recommend disabling these together).
+    "COM812",  # missing-trailing-comma
+    "ISC001",  # single-line-implicit-string-concatenation
+    # Mutually exclusive docstring rules; the Google convention picks one of each.
+    "D203",    # one-blank-line-before-class (we use D211)
+    "D213",    # multi-line-summary-second-line (we use D212)
+    # Licence headers are checked by `reuse lint`, which understands REUSE.toml.
+    "CPY001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "S101",     # assert is how pytest works
+    "PLR2004",  # literal values are the point of a test
+    "D",        # test names document themselves
+    "SLF001",   # tests may reach into private helpers
+    "INP001",   # tests/ is not a package
+]
+# Research probe: everything that is a style or structure finding, not a bug class.
+"probe/**" = [
+    "ANN", "D", "E501", "EM", "TRY003", "FBT", "PLR", "C901", "PLC0415", "N806",
+    "PT018", "T201", "S101", "S105", "S305", "ERA001", "EXE001", "INP001",
+    "PERF401", "C408", "SLF001", "BLE001", "S311", "PLW0603", "TRY300", "TRY301",
+    "SIM102", "SIM108", "RET503", "RET504", "RET505", "FURB167", "I001", "UP",
+    "E741", "ARG001", "ARG002", "DTZ005", "PTH", "G004", "TC003", "S110", "A001",
+    "N802", "N803", "N816", "PIE790", "B904", "RUF005", "RUF012", "RUF100",
+    "PLW2901", "PGH003", "PYI034", "TRY400", "FIX002", "TD", "Q000", "Q003", "UP031",
+    "ASYNC109", "TRY201", "PT012",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 5
+max-branches = 12
+max-returns = 6
+max-statements = 50
+
+[tool.ruff.lint.flake8-pytest-style]
+fixture-parentheses = false
+mark-parentheses = false
+
+[tool.ruff.lint.isort]
+known-first-party = ["pyronix_cloud"]
+force-sort-within-sections = true
+
+# --------------------------------------------------------------------------- mypy
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["src", "tests"]
+warn_unreachable = true
+enable_error_code = [
+    "ignore-without-code",
+    "redundant-expr",
+    "truthy-bool",
+    "possibly-undefined",
+    "explicit-override",
+    "unused-awaitable",
+]
+
+# --------------------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--cov=pyronix_cloud",
+    "--cov-branch",
+    "--cov-report=term-missing:skip-covered",
+]
+filterwarnings = ["error"]
+xfail_strict = true
+
+[tool.coverage.run]
+branch = true
+source = ["pyronix_cloud"]
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "@overload",
+    "raise NotImplementedError",
+]
+
+# --------------------------------------------------------------------------- codespell
+[tool.codespell]
+skip = "./decompiled,./apk,./.venv,./LICENSES,uv.lock,*.log"
+ignore-words-list = "omitt,ser,inout"

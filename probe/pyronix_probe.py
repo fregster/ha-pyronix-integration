@@ -786,7 +786,7 @@ def print_panel_text(text: str, counters: dict) -> None:
         try:
             doc = json.loads(text)
         except json.JSONDecodeError as e:
-            print(f"\n--- unparseable JSON ({e}) ---\n{text}", flush=True)
+            print(f"\n--- unparsable JSON ({e}) ---\n{text}", flush=True)
             return
         typ = doc.get("type", "?") if isinstance(doc, dict) else "?"
         counters[typ] = counters.get(typ, 0) + 1

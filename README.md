@@ -84,6 +84,17 @@ cp .env.example .env        # then fill in your panel details
 See [AGENTS.md](AGENTS.md) for conventions, safety rules and the development workflow. These apply
 to human and AI contributors alike.
 
+## Licence
+
+- The `pyronix_cloud` library, the probe and the documentation are licensed under the
+  [GNU LGPL v3.0 or later](LICENSES/LGPL-3.0-or-later.txt), which builds on the
+  [GNU GPL v3.0](COPYING).
+- The Home Assistant integration (`custom_components/`) is licensed under the
+  [Apache License 2.0](LICENSES/Apache-2.0.txt).
+
+Per-file licensing follows the [REUSE](https://reuse.software) specification
+(see [REUSE.toml](REUSE.toml)).
+
 ## Legal
 
 This project is for interoperability with hardware you own. The APK and decompiled sources are
