@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Self
 from pyronix_cloud import commands
 from pyronix_cloud.area_commands import arm_areas, disarm_areas
 from pyronix_cloud.cloud import LIVE_URL, CloudIdentity
+from pyronix_cloud.command_guard import CommandGuard
 from pyronix_cloud.connection import Connection, open_socket
 from pyronix_cloud.errors import (
     ConnectionClosedError,
@@ -87,6 +88,7 @@ class PyronixClient:
         self._connection: Connection | None = None
         self._connected = False
         self._disconnect_listeners: list[DisconnectListener] = []
+        self._command_guard = CommandGuard()
 
     @property
     def snapshot(self) -> PanelSnapshot:
@@ -182,17 +184,19 @@ class PyronixClient:
             NotConnectedError: No session is connected.
             ValueError: The area numbers are invalid.
             NotPermittedError: The user may not set one of the areas.
+            CommandInProgressError: Another command is running on this client.
             SetRefusedError: Without ``force``, an area cannot be set; the
                 error carries the area and its faults.
             CommandNotConfirmedError: The panel did not confirm in time.
         """
-        return await arm_areas(
-            self._require_connection(),
-            self._feed,
-            self._timeouts.command,
-            tuple(areas),
-            force=force,
-        )
+        with self._command_guard.hold():
+            return await arm_areas(
+                self._require_connection(),
+                self._feed,
+                self._timeouts.command,
+                tuple(areas),
+                force=force,
+            )
 
     async def disarm(self, areas: Iterable[int]) -> PanelSnapshot:
         """Unset areas and wait until each is unset.
@@ -208,14 +212,16 @@ class PyronixClient:
             NotConnectedError: No session is connected.
             ValueError: The area numbers are invalid.
             NotPermittedError: The user may not unset one of the areas.
+            CommandInProgressError: Another command is running on this client.
             CommandNotConfirmedError: The panel did not confirm in time.
         """
-        return await disarm_areas(
-            self._require_connection(),
-            self._feed,
-            self._timeouts.command,
-            tuple(areas),
-        )
+        with self._command_guard.hold():
+            return await disarm_areas(
+                self._require_connection(),
+                self._feed,
+                self._timeouts.command,
+                tuple(areas),
+            )
 
     async def close(self) -> None:
         """Say goodbye and close the socket.

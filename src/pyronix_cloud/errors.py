@@ -120,5 +120,13 @@ class PyronixTimeoutError(PyronixError):
     """An expected reply did not arrive in time."""
 
 
+class CommandInProgressError(PyronixError):
+    """Another set/unset command is still running on the same client.
+
+    Nothing was sent. The client runs one command at a time and refuses, rather
+    than queues, a second one.
+    """
+
+
 class CommandNotConfirmedError(PyronixTimeoutError):
     """A set/unset command was sent but the panel did not report the change."""

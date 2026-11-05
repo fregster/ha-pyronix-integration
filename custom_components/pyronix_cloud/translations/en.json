@@ -163,6 +163,9 @@
     "command_not_confirmed": {
       "message": "The panel did not confirm the command in time."
     },
+    "command_in_progress": {
+      "message": "Another arm or disarm command is still running. Wait for it to finish, then try again."
+    },
     "panel_busy": {
       "message": "The panel is busy with another remote session, such as the HomeControl2 app."
     },

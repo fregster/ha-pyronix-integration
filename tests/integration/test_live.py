@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -182,6 +183,17 @@ async def test_arm_not_permitted(loaded: MockConfigEntry) -> None:
         await loaded.runtime_data.async_disarm([4])
     assert raised.value.translation_key == "not_permitted"
     assert loaded.runtime_data.client.connected
+
+
+async def test_command_while_another_runs(loaded: MockConfigEntry) -> None:
+    client = loaded.runtime_data.client
+    other = asyncio.create_task(client.arm([0]))  # a direct library caller
+    await asyncio.sleep(0)
+    with pytest.raises(HomeAssistantError) as raised:
+        await loaded.runtime_data.async_disarm([0])
+    assert raised.value.translation_key == "command_in_progress"
+    snapshot = await other
+    assert snapshot.areas[0].status in {AreaStatus.SETTING, AreaStatus.SET}
 
 
 def test_default_backoff() -> None:
