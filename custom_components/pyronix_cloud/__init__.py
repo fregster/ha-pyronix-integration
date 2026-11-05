@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Final
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP, Platform
 
 from .coordinator import PyronixConfigEntry, PyronixCoordinator
+from .device_firmware import async_track_firmware
 
 if TYPE_CHECKING:
     from homeassistant.core import Event, HomeAssistant
@@ -40,6 +41,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: PyronixConfigEntry) -> b
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _on_stop)
     )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_on_unload(async_track_firmware(hass, coordinator))
     return True
 
 

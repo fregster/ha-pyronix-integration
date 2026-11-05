@@ -1,6 +1,7 @@
 {
   "domain": "pyronix_cloud",
   "name": "Pyronix Cloud",
+  "categories": ["security_safety.alarm_systems"],
   "codeowners": ["@fregster"],
   "config_flow": true,
   "documentation": "https://github.com/fregster/ha-pyronix-integration",

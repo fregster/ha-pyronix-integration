@@ -1,5 +1,10 @@
 # Pyronix Cloud for Home Assistant
 
+[![CI](https://github.com/fregster/ha-pyronix-integration/actions/workflows/ci.yml/badge.svg)](https://github.com/fregster/ha-pyronix-integration/actions/workflows/ci.yml)
+[![GitHub release](https://img.shields.io/github/v/release/fregster/ha-pyronix-integration?include_prereleases)](https://github.com/fregster/ha-pyronix-integration/releases)
+
+[![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=fregster&repository=ha-pyronix-integration&category=integration)
+
 > **Status: pre-alpha.** The protocol was worked out from the Android app (see
 > [PROTOCOL.md](PROTOCOL.md)). Read-only sessions (handshake, login, state dump, pushed updates)
 > have been tested against a real Euro 46. The library and integration are tested offline against
@@ -50,10 +55,27 @@ Planned: output switches, input omit, the event log and PIR-camera photos.
 
 ## Installation
 
-1. In HACS, add this repository as a custom repository (category *Integration*) and install
-   **Pyronix Cloud**. HACS installs the `pyronix-cloud` library from PyPI.
-2. Restart Home Assistant (2026.2 or later).
+You need Home Assistant 2026.2 or later.
+
+### HACS (recommended)
+
+[![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=fregster&repository=ha-pyronix-integration&category=integration)
+
+1. Click the button above, or in HACS add `https://github.com/fregster/ha-pyronix-integration`
+   as a custom repository (category *Integration*). Then install **Pyronix Cloud**. HACS
+   installs the `pyronix-cloud` library from PyPI.
+2. Restart Home Assistant.
 3. Add the **Pyronix Cloud** integration and enter the details below.
+
+### Manual installation
+
+1. Download this repository (a [release](https://github.com/fregster/ha-pyronix-integration/releases)
+   or a ZIP of `main`) and copy `custom_components/pyronix_cloud` into the `custom_components`
+   folder of your Home Assistant configuration directory.
+2. Restart Home Assistant. It installs the `pyronix-cloud` library from PyPI on first start.
+3. Add the **Pyronix Cloud** integration and enter the details below.
+
+HACS tells you about new releases. With a manual install you have to check for them yourself.
 
 ## What you need
 
