@@ -161,7 +161,7 @@
       "message": "The user code is not allowed to set or unset these areas."
     },
     "command_not_confirmed": {
-      "message": "The panel did not confirm the command in time."
+      "message": "The panel did not confirm the command, but it may have reached the panel. Check the alarm state before trying again."
     },
     "command_in_progress": {
       "message": "Another arm or disarm command is still running. Wait for it to finish, then try again."

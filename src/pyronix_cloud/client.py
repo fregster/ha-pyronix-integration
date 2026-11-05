@@ -187,7 +187,8 @@ class PyronixClient:
             CommandInProgressError: Another command is running on this client.
             SetRefusedError: Without ``force``, an area cannot be set; the
                 error carries the area and its faults.
-            CommandNotConfirmedError: The panel did not confirm in time.
+            CommandNotConfirmedError: The command may have reached the panel
+                but was not confirmed; check the state, do not retry blindly.
         """
         with self._command_guard.hold():
             return await arm_areas(
@@ -213,7 +214,8 @@ class PyronixClient:
             ValueError: The area numbers are invalid.
             NotPermittedError: The user may not unset one of the areas.
             CommandInProgressError: Another command is running on this client.
-            CommandNotConfirmedError: The panel did not confirm in time.
+            CommandNotConfirmedError: The command may have reached the panel
+                but was not confirmed; check the state, do not retry blindly.
         """
         with self._command_guard.hold():
             return await disarm_areas(

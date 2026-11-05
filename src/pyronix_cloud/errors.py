@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pyronix_cloud.models import Area
+    from pyronix_cloud.panel_state import PanelSnapshot
 
 
 class PyronixError(Exception):
@@ -128,5 +129,23 @@ class CommandInProgressError(PyronixError):
     """
 
 
-class CommandNotConfirmedError(PyronixTimeoutError):
-    """A set/unset command was sent but the panel did not report the change."""
+class CommandNotConfirmedError(PyronixError):
+    """A set/unset command may have reached the panel, but its outcome is unknown.
+
+    Raised for any failure after the command was handed to the socket: the
+    panel did not confirm in time, the session ended, or the send failed part
+    way. The cause is chained (``__cause__``).
+
+    **The command may have taken effect.** Callers must read the panel state
+    (reconnect if needed) before acting again, and must not retry
+    automatically: a repeated set or unset can arm or disarm a home the user
+    did not mean to.
+
+    Attributes:
+        snapshot: The panel state when the wait ended, or None.
+    """
+
+    def __init__(self, message: str, snapshot: PanelSnapshot | None = None) -> None:
+        """Record the message and the last known panel state."""
+        super().__init__(message)
+        self.snapshot = snapshot
