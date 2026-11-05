@@ -181,6 +181,10 @@ data:
 
 To make the normal arm actions behave like the app, turn on **Always force arm** in the options.
 
+A forced set can still be refused: if the panel cancels it or reports that the area cannot be
+set, the action fails at once with the panel's reason. Arming an area that is already set (or
+setting, or in alarm) sends nothing to the panel.
+
 The integration never repeats an arm or disarm on its own. If a command fails, it reports the
 error and leaves the next step to you.
 
@@ -371,7 +375,8 @@ reason is what the panel reports, for example "Landing DT Open".
 ### The panel did not confirm the command
 
 `command_not_confirmed`. Home Assistant sent the arm or disarm, but the panel did not report the
-change. **The command may still have reached the panel.**
+change in time, or the connection dropped after the command went out. **The command may still
+have reached the panel.**
 
 1. Check the panel's state first: wait for the next poll, or look at the keypad or the app.
 2. Only then decide whether to send the command again. Never repeat it blindly, and do not build
