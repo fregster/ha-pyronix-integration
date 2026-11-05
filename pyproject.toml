@@ -68,12 +68,12 @@ packages = ["src/pyronix_cloud"]
 # The sdist carries the library only; the HA integration ships through HACS.
 [tool.hatch.build.targets.sdist]
 include = [
-    "src/pyronix_cloud",
-    "tests/*.py",
-    "LICENSES/LGPL-3.0-or-later.txt",
-    "COPYING",
-    "README.md",
-    "PROTOCOL.md",
+    "/src/pyronix_cloud",
+    "/tests/*.py",
+    "/LICENSES/LGPL-3.0-or-later.txt",
+    "/COPYING",
+    "/README.md",
+    "/PROTOCOL.md",
 ]
 
 # --------------------------------------------------------------------------- ruff
