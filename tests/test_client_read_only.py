@@ -28,7 +28,7 @@ CREDENTIALS = Credentials(
     user_code=PanelBehaviour().user_code,
     device_id="device-1",
 )
-FAST = Timeouts(connect=1, step=1, dump=1, command=0.05, close=1)
+FAST = Timeouts(connect=1, step=1, dump=1, command=1, close=1)
 
 type Action = Callable[[PyronixClient], Awaitable[object]]
 

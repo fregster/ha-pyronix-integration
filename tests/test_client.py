@@ -46,14 +46,18 @@ CREDENTIALS = Credentials(
     user_code="1234",
     device_id="device-1",
 )
-FAST = Timeouts(connect=1, step=1, dump=1, command=0.05, close=1)
+# The fake panel confirms at once, so 1 s only matters on a starved event loop.
+FAST = Timeouts(connect=1, step=1, dump=1, command=1, close=1)
+NO_CONFIRM_WAIT = Timeouts(connect=1, step=1, dump=1, command=0.05, close=1)
 
 
 def client_for(
-    connector: Connector, credentials: Credentials = CREDENTIALS
+    connector: Connector,
+    credentials: Credentials = CREDENTIALS,
+    timeouts: Timeouts = FAST,
 ) -> PyronixClient:
     return PyronixClient(
-        credentials, connector, url="memory://", timeouts=FAST, retry=NO_RETRY
+        credentials, connector, url="memory://", timeouts=timeouts, retry=NO_RETRY
     )
 
 
@@ -183,7 +187,7 @@ async def test_arm_of_a_set_area_does_not_wait() -> None:
 
 async def test_unconfirmed_arm_times_out() -> None:
     fake = FakeCloud(panel_factory=panels(PanelBehaviour(confirm_commands=False)))
-    client = client_for(fake.connector())
+    client = client_for(fake.connector(), timeouts=NO_CONFIRM_WAIT)
     await client.connect()
     with pytest.raises(CommandNotConfirmedError):
         await client.arm([0])
