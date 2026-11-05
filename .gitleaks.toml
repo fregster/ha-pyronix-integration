@@ -1,0 +1,48 @@
+# SPDX-FileCopyrightText: 2026 Paul Fryer
+# SPDX-License-Identifier: LGPL-3.0-or-later
+#
+# gitleaks configuration: the built-in secret rules plus project rules. Picked up
+# automatically by the pre-commit hook (staged changes) and the CI job (full history).
+# tests/test_gitleaks_rules.py checks the project rules against known samples.
+#
+# Full local paths leak a developer's username and machine layout. Write paths
+# relative to the repository, or use a placeholder such as `<your clone>`.
+#
+# Each rule reports only the identifying segment (secretGroup = 1): gitleaks' default
+# global allowlist drops findings whose secret looks like a plain file path.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "local-home-path"
+description = "Full path into a user's home directory (macOS or Linux)"
+regex = '''/(?:Users|home)/([A-Za-z0-9._-]+)/'''
+secretGroup = 1
+keywords = ["/users/", "/home/"]
+
+# Generic placeholders and service accounts are not anyone's personal path.
+[[rules.allowlists]]
+description = "Placeholder or service-account home directories"
+regexTarget = "match"
+regexes = [
+    '''^/(?:Users|home)/(?:runner|user|username|you|yourname|me|example|homeassistant)/$''',
+]
+
+[[rules]]
+id = "local-home-path-windows"
+description = "Full path into a user's home directory (Windows)"
+regex = '''\b[A-Za-z]:\\+Users\\+([^\\\s"'`]+)'''
+secretGroup = 1
+keywords = ["\\users\\"]
+
+[[rules.allowlists]]
+description = "Placeholder home directories"
+regexTarget = "secret"
+regexes = ['''^(?i:user|username|you|yourname|me|example|public)$''']
+
+[[rules]]
+id = "local-temp-path"
+description = "Machine-specific temporary directory (macOS)"
+regex = '''/(?:var/folders/([A-Za-z0-9_+-]{2})/|private/(tmp|var)/)'''
+keywords = ["/var/folders/", "/private/"]
