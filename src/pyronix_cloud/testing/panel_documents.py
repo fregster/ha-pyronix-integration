@@ -20,7 +20,14 @@ if TYPE_CHECKING:
 UNSET: Final = 0
 SET: Final = 1
 SETTING: Final = 3
-STATUS_TEXT: Final = {UNSET: "Unset", SET: "Set", SETTING: "Setting"}
+STATUS_TEXT: Final = {
+    UNSET: "Unset",
+    SET: "Set",
+    SETTING: "Setting",
+    4: "Cannot Set",
+    5: "Set Delayed",
+    6: "Set Cancelled",
+}
 """Display text sent with each area status the fake pushes."""
 
 _DEFAULT_LOG_COUNT: Final = 10

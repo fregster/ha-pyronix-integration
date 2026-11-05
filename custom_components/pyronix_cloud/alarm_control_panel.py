@@ -10,12 +10,14 @@ from homeassistant.components.alarm_control_panel import AlarmControlPanelEntity
 from homeassistant.components.alarm_control_panel.const import (
     AlarmControlPanelEntityFeature,
     AlarmControlPanelState,
+    CodeFormat,
 )
 from homeassistant.exceptions import ServiceValidationError
 
 from pyronix_cloud import AreaStatus, SetType
 
-from .const import DOMAIN, LEVEL_MODES
+from .access import AccessPolicy, async_check_access
+from .const import CONF_ALWAYS_FORCE_ARM, DOMAIN, FORCE_ARM_MODES, LEVEL_MODES
 from .entity import PyronixEntity
 
 if TYPE_CHECKING:
@@ -103,23 +105,55 @@ def settable(snapshot: PanelSnapshot) -> frozenset[int]:
 
 
 class _PanelAlarm(PyronixEntity, AlarmControlPanelEntity):
-    """Common behaviour: no code needed (the user code is in the entry)."""
+    """Common behaviour: the access check, and arming with or without force.
 
-    _attr_code_arm_required = False
-    _attr_code_format = None
+    The panel's user code is in the entry; the code asked for here is the
+    access option's PIN, never the keypad code.
+    """
 
-    async def _async_arm(self, number: int | None) -> None:
-        """Set one area (force-omitting open inputs, as the app does).
+    def __init__(self, coordinator: PyronixCoordinator, key: str) -> None:
+        """Read the access policy and arm options; a change reloads the entry."""
+        super().__init__(coordinator, key)
+        options = coordinator.config_entry.options
+        self._policy = AccessPolicy.from_options(options)
+        self._always_force = bool(options.get(CONF_ALWAYS_FORCE_ARM, False))
+        self._attr_code_arm_required = self._policy.code_required
+        self._attr_code_format = (
+            CodeFormat.NUMBER if self._policy.code_required else None
+        )
+
+    async def _async_authorise(self, code: str | None) -> None:
+        """Raise unless the calling user or code may arm and disarm."""
+        context = self._context
+        await async_check_access(
+            self.hass,
+            self._policy,
+            code=code,
+            user_id=context.user_id if context is not None else None,
+        )
+
+    async def _async_arm(
+        self, number: int | None, code: str | None, *, force: bool | None = None
+    ) -> None:
+        """Set one area, forced if asked or if the always-force option is on.
 
         Raises:
-            ServiceValidationError: The mode is not available on this panel.
-            HomeAssistantError: The panel did not set the area.
+            ServiceValidationError: Access denied, or the mode is not available.
+            HomeAssistantError: The panel refused or did not set the area.
         """
+        await self._async_authorise(code)
         if number is None:
             raise ServiceValidationError(
                 translation_domain=DOMAIN, translation_key="mode_not_supported"
             )
-        await self.coordinator.async_arm([number], force=True)
+        force = self._always_force if force is None else force
+        await self.coordinator.async_arm([number], force=force)
+
+    async def _async_disarm(self, numbers: list[int], code: str | None) -> None:
+        """Unset areas (none to unset sends nothing) after the access check."""
+        await self._async_authorise(code)
+        if numbers:
+            await self.coordinator.async_disarm(numbers)
 
 
 class LevelAlarm(_PanelAlarm):
@@ -158,17 +192,25 @@ class LevelAlarm(_PanelAlarm):
     @override
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
         """Set level A."""
-        await self._async_arm(self._level(AlarmControlPanelState.ARMED_AWAY))
+        await self._async_arm(self._level(AlarmControlPanelState.ARMED_AWAY), code)
 
     @override
     async def async_alarm_arm_night(self, code: str | None = None) -> None:
         """Set level B."""
-        await self._async_arm(self._level(AlarmControlPanelState.ARMED_NIGHT))
+        await self._async_arm(self._level(AlarmControlPanelState.ARMED_NIGHT), code)
 
     @override
     async def async_alarm_arm_custom_bypass(self, code: str | None = None) -> None:
         """Set level C."""
-        await self._async_arm(self._level(AlarmControlPanelState.ARMED_CUSTOM_BYPASS))
+        level = self._level(AlarmControlPanelState.ARMED_CUSTOM_BYPASS)
+        await self._async_arm(level, code)
+
+    async def async_force_arm(
+        self, code: str | None = None, mode: str = "away"
+    ) -> None:
+        """Force-set the level of ``mode`` (away A, night B, custom_bypass C)."""
+        level = self._level(FORCE_ARM_MODES[mode])
+        await self._async_arm(level, self.code_or_default_code(code), force=True)
 
     @override
     async def async_alarm_disarm(self, code: str | None = None) -> None:
@@ -183,8 +225,7 @@ class LevelAlarm(_PanelAlarm):
             for area in level_areas(self.snapshot).values()
             if area.status is not AreaStatus.UNSET
         ]
-        if numbers:
-            await self.coordinator.async_disarm(numbers)
+        await self._async_disarm(numbers, code)
 
 
 class AreaAlarm(_PanelAlarm):
@@ -214,9 +255,17 @@ class AreaAlarm(_PanelAlarm):
     @override
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
         """Set this area."""
-        await self._async_arm(self._number)
+        await self._async_arm(self._number, code)
+
+    async def async_force_arm(
+        self,
+        code: str | None = None,
+        mode: str = "away",  # noqa: ARG002 - levels only; one area has one mode
+    ) -> None:
+        """Force-set this area; ``mode`` does not apply to a single area."""
+        await self._async_arm(self._number, self.code_or_default_code(code), force=True)
 
     @override
     async def async_alarm_disarm(self, code: str | None = None) -> None:
         """Unset this area."""
-        await self.coordinator.async_disarm([self._number])
+        await self._async_disarm([self._number], code)

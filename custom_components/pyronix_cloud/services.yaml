@@ -1,0 +1,22 @@
+force_arm:
+  target:
+    entity:
+      integration: pyronix_cloud
+      domain: alarm_control_panel
+  fields:
+    code:
+      required: false
+      example: "1234"
+      selector:
+        text:
+          type: password
+    mode:
+      required: false
+      default: away
+      selector:
+        select:
+          translation_key: force_arm_mode
+          options:
+            - away
+            - night
+            - custom_bypass

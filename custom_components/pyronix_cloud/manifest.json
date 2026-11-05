@@ -1,12 +1,13 @@
 {
   "domain": "pyronix_cloud",
   "name": "Pyronix Cloud",
+  "categories": ["security_safety.alarm_systems"],
   "codeowners": ["@fregster"],
   "config_flow": true,
-  "documentation": "https://github.com/fregster/ha-pyronix-intergration",
+  "documentation": "https://github.com/fregster/ha-pyronix-integration",
   "integration_type": "device",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/fregster/ha-pyronix-intergration/issues",
+  "issue_tracker": "https://github.com/fregster/ha-pyronix-integration/issues",
   "loggers": ["pyronix_cloud"],
   "requirements": ["pyronix-cloud==0.1.0"],
   "version": "0.1.0"

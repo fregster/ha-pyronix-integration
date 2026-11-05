@@ -23,6 +23,7 @@ from pyronix_cloud import (
     PanelBusyError,
     PanelSnapshot,
     PyronixError,
+    SetRefusedError,
 )
 
 from .client_factory import create_client
@@ -72,6 +73,12 @@ def update_failed(err: PyronixError) -> UpdateFailed:
 
 def _command_error(err: PyronixError) -> HomeAssistantError:
     """Return the translated HomeAssistantError for a failed arm or disarm."""
+    if isinstance(err, SetRefusedError):
+        return HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="arm_refused",
+            translation_placeholders={"area": err.area.name, "reason": err.reason},
+        )
     key = next(
         (key for kind, key in _COMMAND_ERRORS if isinstance(err, kind)),
         "command_failed",
@@ -109,7 +116,9 @@ class PyronixCoordinator(DataUpdateCoordinator[PanelSnapshot]):
             update_interval=None if persistent else timedelta(minutes=minutes),
             always_update=False,
         )
-        self.client = create_client(hass, entry.data)
+        # Sessions follow each other closely (polls, commands, reconnects), and
+        # the cloud may refuse one with `n` right after the last goodbye.
+        self.client = create_client(hass, entry.data, retry_not_polling=True)
         self.lock = asyncio.Lock()
         self._state = ConnectionState.IDLE
         self._live = LiveSession(self) if persistent else None

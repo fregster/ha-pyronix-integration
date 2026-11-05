@@ -31,6 +31,7 @@ from pyronix_cloud import (
     SubscriptionExpiredError,
 )
 
+from .access_form import access_errors, async_access_fields, async_access_options
 from .client_factory import create_client
 from .const import (
     CONF_ADVANCED,
@@ -157,6 +158,8 @@ class PyronixConfigFlow(ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         """Generate this client's device ID once for the flow."""
         self._device_id = secrets.token_hex(DEVICE_ID_BYTES)
+        # Title, data and options of the validated entry, kept for the access step.
+        self._new_entry: tuple[str, dict[str, Any], dict[str, Any]] = ("", {}, {})
 
     @staticmethod
     @callback
@@ -185,17 +188,34 @@ class PyronixConfigFlow(ConfigFlow, domain=DOMAIN):
                 if isinstance(result, str):
                     errors["base"] = result
                 else:
-                    return self.async_create_entry(
-                        title=_title(result),
-                        data=data,
-                        options=_entry_options(user_input),
-                    )
+                    self._new_entry = (_title(result), data, _entry_options(user_input))
+                    return await self.async_step_access()
         return self.async_show_form(
             step_id="user",
             data_schema=self.add_suggested_values_to_schema(
                 _USER_SCHEMA,  # type: ignore[arg-type,unused-ignore]  # probatio on HA >= 2026.3
                 user_input,
             ),
+            errors=errors,
+        )
+
+    async def async_step_access(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Choose who may arm and disarm, then create the entry."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            errors = access_errors(user_input, {})
+            if not errors:
+                title, data, options = self._new_entry
+                access = await async_access_options(self.hass, user_input, {})
+                return self.async_create_entry(
+                    title=title, data=data, options={**options, **access}
+                )
+        fields = await async_access_fields(self.hass, user_input or {})
+        return self.async_show_form(
+            step_id="access",
+            data_schema=vol.Schema(fields),  # type: ignore[arg-type,unused-ignore]  # probatio on HA >= 2026.3
             errors=errors,
         )
 

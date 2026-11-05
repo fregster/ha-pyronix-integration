@@ -1,5 +1,10 @@
 # Pyronix Cloud for Home Assistant
 
+[![CI](https://github.com/fregster/ha-pyronix-integration/actions/workflows/ci.yml/badge.svg)](https://github.com/fregster/ha-pyronix-integration/actions/workflows/ci.yml)
+[![GitHub release](https://img.shields.io/github/v/release/fregster/ha-pyronix-integration?include_prereleases)](https://github.com/fregster/ha-pyronix-integration/releases)
+
+[![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=fregster&repository=ha-pyronix-integration&category=integration)
+
 > **Status: pre-alpha.** The protocol was worked out from the Android app (see
 > [PROTOCOL.md](PROTOCOL.md)). Read-only sessions (handshake, login, state dump, pushed updates)
 > have been tested against a real Euro 46. The library and integration are tested offline against
@@ -32,7 +37,7 @@ The full specification is in [PROTOCOL.md](PROTOCOL.md).
 
 | HA platform | What it shows |
 |---|---|
-| `alarm_control_panel` | One entity per panel on level-set panels: level A → *away*, B → *night*, C → *custom bypass*. State comes from the panel's area status codes. Arming uses force-omit, as the app does. Area-set panels get one entity per area. |
+| `alarm_control_panel` | One entity per panel on level-set panels: level A → *away*, B → *night*, C → *custom bypass*. State comes from the panel's area status codes. Arming stops with the reason if an input is open; the *Force arm* action omits open inputs, as the app does (see [Arming and force arming](#arming-and-force-arming)). Area-set panels get one entity per area. |
 | `binary_sensor` | One per input (zone): open/closed. |
 | `sensor` | Diagnostic: connection state and fault count. |
 | Diagnostics | Download with all credentials and identifiers redacted. |
@@ -50,10 +55,27 @@ Planned: output switches, input omit, the event log and PIR-camera photos.
 
 ## Installation
 
-1. In HACS, add this repository as a custom repository (category *Integration*) and install
-   **Pyronix Cloud**. HACS installs the `pyronix-cloud` library from PyPI.
-2. Restart Home Assistant (2026.2 or later).
+You need Home Assistant 2026.2 or later.
+
+### HACS (recommended)
+
+[![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=fregster&repository=ha-pyronix-integration&category=integration)
+
+1. Click the button above, or in HACS add `https://github.com/fregster/ha-pyronix-integration`
+   as a custom repository (category *Integration*). Then install **Pyronix Cloud**. HACS
+   installs the `pyronix-cloud` library from PyPI.
+2. Restart Home Assistant.
 3. Add the **Pyronix Cloud** integration and enter the details below.
+
+### Manual installation
+
+1. Download this repository (a [release](https://github.com/fregster/ha-pyronix-integration/releases)
+   or a ZIP of `main`) and copy `custom_components/pyronix_cloud` into the `custom_components`
+   folder of your Home Assistant configuration directory.
+2. Restart Home Assistant. It installs the `pyronix-cloud` library from PyPI on first start.
+3. Add the **Pyronix Cloud** integration and enter the details below.
+
+HACS tells you about new releases. With a manual install you have to check for them yourself.
 
 ## What you need
 
@@ -65,6 +87,56 @@ The same details HomeControl2 uses. Each one is listed with its label in the app
 - **App password** (`PanelPwd`). The login screen asks for this. Your installer set it, and it is *not* your keypad code.
 - **User code** (`UserCode`). The login screen asks for this too. It is your keypad code.
 - An active Pyronix Cloud subscription for the panel
+
+## Who can arm and disarm
+
+Home Assistant arms and disarms with the keypad user code you entered during setup, so the
+integration adds its own check on top. An admin chooses it in the last setup step and can change
+it later under Settings → Devices & services → Pyronix Cloud → Configure:
+
+- **PIN (default).** Every arm, disarm and force arm asks for a PIN of 4 to 8 digits. You choose
+  it in Home Assistant; it may be the same number as your keypad code, but it is a separate
+  setting. Home Assistant stores only a salted hash of it (scrypt), never the PIN itself, and
+  diagnostics redact the hash. Automations and scripts must send the PIN as `code`. To change
+  the PIN, enter a new one in the options; leave the field empty to keep the current one.
+- **Selected users.** Only the Home Assistant users you pick may arm and disarm; no PIN is asked
+  for. Automations and scripts act without a user, so they are refused unless you also tick
+  **Allow automations and scripts**.
+- **Anyone.** No check: every Home Assistant user, automation and script can disarm the alarm.
+
+A refused call fails with a message saying why (wrong PIN, user not allowed, automations not
+allowed) and nothing is sent to the panel.
+
+Entries created before this option existed keep working as **Anyone**, so an upgrade breaks no
+automations. Home Assistant shows a repair issue for them until an admin saves the options with a
+choice.
+
+## Arming and force arming
+
+The normal arm actions (*Arm away*, and on level-set panels *Arm night* and *Arm custom bypass*)
+arm **without force**: if an input is open the panel will not set, and the action fails with the
+panel's reason, for example "Full Set cannot be armed: Landing DT Open". Home Assistant checks the
+area before sending anything, and also stops at once if the panel refuses after the command. While
+the exit timer runs the entity shows *arming*.
+
+To arm anyway, use the **Force arm** action (`pyronix_cloud.force_arm`). It omits open inputs
+until the next unset, as the HomeControl2 app always does. It takes an optional `code` (the PIN)
+and, on level-set panels, a `mode` (`away`, `night` or `custom_bypass`, default `away`); area
+entities ignore `mode`.
+
+```yaml
+action: pyronix_cloud.force_arm
+target:
+  entity_id: alarm_control_panel.pyronix_alarm
+data:
+  mode: night
+  code: "4711"
+```
+
+To make the normal arm actions behave like the app, turn on **Always force arm** in the options.
+
+The integration never repeats an arm or disarm on its own. If a command fails, it reports the
+error and leaves the next step to you.
 
 ## Repository layout
 

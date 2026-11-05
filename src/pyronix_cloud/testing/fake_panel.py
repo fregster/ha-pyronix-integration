@@ -46,10 +46,6 @@ _EXTRA_FLAG: Final = 0x80
 _ANNOUNCE_PAD: Final = bytes(11)
 _KEY_INDEX: Final = b"\x01"
 _AREA_COUNT_MASK: Final = 0x7F
-_AREA_STATUSES: Final = {
-    commands.SET_AREAS: (SETTING, SET),
-    commands.UNSET_AREAS: (UNSET,),
-}
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -69,6 +65,7 @@ class PanelBehaviour:
     announce_extra: bytes = b"\x01"
     compressed_key: bool = False
     confirm_commands: bool = True
+    set_statuses: tuple[int, ...] = (SETTING, SET)
     repeat: int = 2
 
     def __post_init__(self) -> None:
@@ -250,7 +247,10 @@ class FakePanel:
             return [self._data(" ")]
         if opcode == commands.REQUEST_LOG:
             return [self._data(self.documents.log(argument))]
-        statuses = _AREA_STATUSES.get(opcode)
+        statuses = {
+            commands.SET_AREAS: self.behaviour.set_statuses,
+            commands.UNSET_AREAS: (UNSET,),
+        }.get(opcode)
         if statuses is None or not self.behaviour.confirm_commands:
             return []
         areas = payload[2 : 2 + (argument & _AREA_COUNT_MASK)]

@@ -13,5 +13,10 @@
         "default": "mdi:alert-circle-outline"
       }
     }
+  },
+  "services": {
+    "force_arm": {
+      "service": "mdi:shield-alert-outline"
+    }
   }
 }

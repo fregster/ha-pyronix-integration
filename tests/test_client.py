@@ -25,6 +25,7 @@ from pyronix_cloud.errors import (
     UnknownCloudReplyError,
 )
 from pyronix_cloud.models import AreaStatus, InputState
+from pyronix_cloud.not_polling_retry import NO_RETRY
 from pyronix_cloud.testing import dump
 from pyronix_cloud.testing.fake_cloud import CloudBehaviour, FakeCloud
 from pyronix_cloud.testing.fake_panel import FakePanel, PanelBehaviour
@@ -51,7 +52,9 @@ FAST = Timeouts(connect=1, step=1, dump=1, command=0.05, close=1)
 def client_for(
     connector: Connector, credentials: Credentials = CREDENTIALS
 ) -> PyronixClient:
-    return PyronixClient(credentials, connector, url="memory://", timeouts=FAST)
+    return PyronixClient(
+        credentials, connector, url="memory://", timeouts=FAST, retry=NO_RETRY
+    )
 
 
 def panels(behaviour: PanelBehaviour) -> Callable[[], FakePanel]:

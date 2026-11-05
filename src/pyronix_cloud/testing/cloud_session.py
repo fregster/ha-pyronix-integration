@@ -49,6 +49,9 @@ class CloudBehaviour:
             for no splitting.
         batch_frames: Join frames produced together into one text first.
         leading_space: Prefix the first panel message of a session with ``" "``.
+        not_polling_after_end: Answer ``MSG_CONN_TO_CLOUD`` with ``n`` this many
+            times after a session that reached the panel ends, as the live cloud
+            sometimes does for ~35 s after a goodbye (reported by aiopyronix).
 
     Raises:
         ValueError: ``chunk_size`` is below 2 or ``error_letter`` is not one
@@ -61,6 +64,7 @@ class CloudBehaviour:
     chunk_size: int | None = 7
     batch_frames: bool = True
     leading_space: bool = True
+    not_polling_after_end: int = 0
 
     def __post_init__(self) -> None:
         """Validate the chunk size and the error letter."""
@@ -78,6 +82,8 @@ class SessionSlot:
     def __init__(self) -> None:
         """Start with the slot free."""
         self.holder: CloudSession | None = None
+        self.refusals = 0
+        """Connections still to refuse with ``n`` since the last holder left."""
 
 
 def _request(message: str) -> tuple[CloudRequest | None, str]:
@@ -182,6 +188,7 @@ class CloudSession:
         self.closed_by_client = by_client
         if self._slot.holder is self:
             self._slot.holder = None
+            self._slot.refusals = self.behaviour.not_polling_after_end
 
     def _error(self, stage: str) -> str | None:
         """Return the configured error reply for ``stage``, if any."""
@@ -191,10 +198,13 @@ class CloudSession:
         return f"<e>{letter} </e>"
 
     def _connect(self, xml: str) -> str:
-        """Answer ``MSG_CONN_TO_CLOUD``: an error, busy, or ``u``."""
+        """Answer ``MSG_CONN_TO_CLOUD``: an error, not polling, busy, or ``u``."""
         error = self._error("connect")
         if error is not None:
             return error
+        if self._slot.refusals > 0:
+            self._slot.refusals -= 1
+            return "<e>n </e>"
         if self.panel is None:
             self.panel = self._factory()
         match = _PASSWORD_TAG.search(xml)

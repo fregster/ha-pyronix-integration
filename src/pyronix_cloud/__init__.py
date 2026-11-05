@@ -27,6 +27,7 @@ from pyronix_cloud.errors import (
     ProtocolError,
     PyronixError,
     PyronixTimeoutError,
+    SetRefusedError,
     SubscriptionExpiredError,
     UnknownCloudReplyError,
 )
@@ -51,6 +52,7 @@ from pyronix_cloud.models import (
     User,
     UserDocument,
 )
+from pyronix_cloud.not_polling_retry import NO_RETRY, RetryPolicy
 from pyronix_cloud.panel_state import PanelSnapshot
 from pyronix_cloud.settings import Credentials, Timeouts
 from pyronix_cloud.websocket import aiohttp_connector
@@ -62,6 +64,7 @@ except PackageNotFoundError:  # pragma: no cover - only when run from a raw chec
 
 __all__ = [
     "LIVE_URL",
+    "NO_RETRY",
     "TEST_URL",
     "AccessDeniedError",
     "Area",
@@ -98,6 +101,8 @@ __all__ = [
     "PyronixClient",
     "PyronixError",
     "PyronixTimeoutError",
+    "RetryPolicy",
+    "SetRefusedError",
     "SetType",
     "SubscriptionExpiredError",
     "Timeouts",

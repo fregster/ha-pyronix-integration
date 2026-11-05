@@ -125,7 +125,7 @@ async def test_arm_and_disarm_levels(
 ) -> None:
     service, area, armed = case
     await call(hass, service)
-    assert last_commands(cloud) == [bytes([0x2D, 0x81, area])]
+    assert last_commands(cloud) == [bytes([0x2D, 0x01, area])]
     assert state_of(hass, "alarm") in {State.ARMING, armed}
     await loaded.runtime_data.async_refresh()
     await hass.async_block_till_done()
@@ -237,7 +237,7 @@ async def test_area_panel_has_one_entity_per_area(
     assert garage.attributes["supported_features"] == 0
     assert features_of(hass, "area_0") == Feature.ARM_AWAY
     await call(hass, "alarm_arm_away", "area_1")
-    assert last_commands(cloud) == [bytes([0x2D, 0x81, 1])]
+    assert last_commands(cloud) == [bytes([0x2D, 0x01, 1])]
     await loaded.runtime_data.async_refresh()
     await hass.async_block_till_done()
     assert state_of(hass, "area_1") == State.ARMED_AWAY

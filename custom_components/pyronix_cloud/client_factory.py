@@ -10,8 +10,10 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from pyronix_cloud import (
     LIVE_URL,
+    NO_RETRY,
     Credentials,
     PyronixClient,
+    RetryPolicy,
     Timeouts,
     aiohttp_connector,
 )
@@ -38,6 +40,11 @@ def session_timeouts() -> Timeouts:
     return Timeouts()
 
 
+def not_polling_retry() -> RetryPolicy:
+    """Return the retries after cloud reply ``n`` (tests shorten them)."""
+    return RetryPolicy()
+
+
 def connector_for(hass: HomeAssistant) -> Connector:
     """Return a WebSocket connector that uses Home Assistant's shared aiohttp session.
 
@@ -48,7 +55,9 @@ def connector_for(hass: HomeAssistant) -> Connector:
     return aiohttp_connector(session, timeout=session_timeouts().connect)
 
 
-def create_client(hass: HomeAssistant, data: Mapping[str, Any]) -> PyronixClient:
+def create_client(
+    hass: HomeAssistant, data: Mapping[str, Any], *, retry_not_polling: bool = False
+) -> PyronixClient:
     """Return a client for the panel described by config entry data.
 
     Nothing is sent until the client connects.
@@ -56,6 +65,9 @@ def create_client(hass: HomeAssistant, data: Mapping[str, Any]) -> PyronixClient
     Args:
         hass: The Home Assistant instance.
         data: Config entry data (or a config flow's equivalent).
+        retry_not_polling: Retry a connection the cloud refuses with ``n``, as
+            it may right after the previous session's goodbye. Off for config
+            flows, so a panel that is really offline is reported at once.
 
     Raises:
         ValueError: A credential is malformed; the message names no value.
@@ -72,4 +84,5 @@ def create_client(hass: HomeAssistant, data: Mapping[str, Any]) -> PyronixClient
         connector_for(hass),
         url=data.get(CONF_CLOUD_URL, LIVE_URL),
         timeouts=session_timeouts(),
+        retry=not_polling_retry() if retry_not_polling else NO_RETRY,
     )

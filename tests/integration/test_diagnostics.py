@@ -9,7 +9,12 @@ from homeassistant.components.diagnostics import REDACTED
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry  # type: ignore[import-untyped]  # the HA test plugin ships no py.typed
 
-from custom_components.pyronix_cloud.const import CONF_CLOUD_URL, DOMAIN
+from custom_components.pyronix_cloud.const import (
+    CONF_ARM_ACCESS,
+    CONF_CLOUD_URL,
+    CONF_PIN_HASH,
+    DOMAIN,
+)
 from custom_components.pyronix_cloud.diagnostics import (
     async_get_config_entry_diagnostics,
 )
@@ -23,11 +28,14 @@ if TYPE_CHECKING:
     from pyronix_cloud.testing.fake_cloud import FakeCloud
 
 CLOUD_URL = "ws://127.0.0.1:8765/private-relay"
+PIN_HASH = "scrypt$16384$8$1$0011$aabbccdd"  # shaped like a real one
+OPTIONS = {**PERSISTENT, CONF_ARM_ACCESS: "pin", CONF_PIN_HASH: PIN_HASH}
 SITE_NAME = "12 Acacia Avenue"
 SECRETS = [
     SITE_NAME,
     *(str(value) for value in ENTRY_DATA.values()),
     CLOUD_URL,
+    PIN_HASH,
     dump.PANEL_ID,
     "Manager",  # the keypad user's name
     "User 1",  # who last set an area
@@ -42,7 +50,7 @@ async def test_diagnostics_are_redacted(hass: HomeAssistant, cloud: FakeCloud) -
         domain=DOMAIN,
         title="Pyronix alarm",
         data={**ENTRY_DATA, CONF_CLOUD_URL: CLOUD_URL},
-        options=PERSISTENT,
+        options=OPTIONS,
         unique_id=dump.PANEL_ID,
     )
     entry.add_to_hass(hass)
@@ -58,7 +66,11 @@ async def test_diagnostics_are_redacted(hass: HomeAssistant, cloud: FakeCloud) -
     for secret in SECRETS:
         assert secret not in text
     assert set(result["entry"]["data"].values()) == {REDACTED}
-    assert result["entry"]["options"] == PERSISTENT
+    assert result["entry"]["options"] == {
+        **PERSISTENT,
+        CONF_ARM_ACCESS: "pin",
+        CONF_PIN_HASH: REDACTED,
+    }
     assert result["persistent"] is True
     assert result["connection_state"] == "connected"
     assert result["last_update_success"] is True
