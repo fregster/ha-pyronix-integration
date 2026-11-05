@@ -400,8 +400,9 @@ async def test_close_wakes_a_waiting_command() -> None:
     assert panel is not None
     await until(lambda: bool(panel.received_commands))
     await client.close()
-    with pytest.raises(ConnectionClosedError):
+    with pytest.raises(CommandNotConfirmedError) as raised:  # it may have been set
         await task
+    assert isinstance(raised.value.__cause__, ConnectionClosedError)
     assert said_goodbye(fake.sessions[0])
 
 

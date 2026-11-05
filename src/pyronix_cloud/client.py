@@ -18,7 +18,8 @@ from typing import TYPE_CHECKING, Self
 
 from pyronix_cloud import commands
 from pyronix_cloud.area_commands import arm_areas, disarm_areas
-from pyronix_cloud.cloud import LIVE_URL, CloudIdentity
+from pyronix_cloud.cloud import LIVE_URL, AppProfile, CloudIdentity
+from pyronix_cloud.command_guard import CommandGuard
 from pyronix_cloud.connection import Connection, open_socket
 from pyronix_cloud.errors import (
     ConnectionClosedError,
@@ -48,7 +49,7 @@ type DisconnectListener = Callable[[BaseException | None], None]
 class PyronixClient:
     """One panel session over the Pyronix Cloud relay."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - all but two are keyword-only options with defaults
         self,
         credentials: Credentials,
         connector: Connector,
@@ -56,6 +57,7 @@ class PyronixClient:
         url: str = LIVE_URL,
         timeouts: Timeouts | None = None,
         retry: RetryPolicy | None = None,
+        app_profile: AppProfile | None = None,
     ) -> None:
         """Prepare the client; nothing is sent until :meth:`connect`.
 
@@ -66,6 +68,8 @@ class PyronixClient:
             timeouts: Phase timeouts; :class:`Timeouts` defaults if None.
             retry: Connection retries after cloud reply ``n``;
                 :class:`RetryPolicy` defaults if None.
+            app_profile: The app identity sent to the cloud; the HomeControl2
+                app's values (:class:`AppProfile` defaults) if None.
 
         Raises:
             ValueError: A credential is malformed (the value is not echoed).
@@ -77,6 +81,7 @@ class PyronixClient:
             app_password=credentials.app_password,
             device_id=credentials.device_id,
             push_id=credentials.push_id,
+            profile=app_profile or AppProfile(),
         )
         commands.login(credentials.user_code)  # validate the code now, not later
         self._connector = connector
@@ -87,6 +92,7 @@ class PyronixClient:
         self._connection: Connection | None = None
         self._connected = False
         self._disconnect_listeners: list[DisconnectListener] = []
+        self._command_guard = CommandGuard()
 
     @property
     def snapshot(self) -> PanelSnapshot:
@@ -151,7 +157,7 @@ class PyronixClient:
             session,
             on_event=self._feed.handle,
             on_end=self._on_end,
-            close_timeout=self._timeouts.close,
+            timeouts=self._timeouts,
         )
         self._connection = connection
         try:
@@ -168,8 +174,10 @@ class PyronixClient:
     async def arm(self, areas: Iterable[int], *, force: bool = True) -> PanelSnapshot:
         """Set areas and wait until each is setting, set or in alarm.
 
+        Nothing is sent if every area is already setting, set or in alarm.
         Without ``force`` an area that is not ready is refused before anything
-        is sent, and a refusal the panel reports afterwards ends the wait at once.
+        is sent. A refusal the panel reports afterwards ends the wait at once:
+        CannotSet or SetCancelled, and without ``force`` also CanOverride.
 
         Args:
             areas: Area numbers.
@@ -182,17 +190,20 @@ class PyronixClient:
             NotConnectedError: No session is connected.
             ValueError: The area numbers are invalid.
             NotPermittedError: The user may not set one of the areas.
-            SetRefusedError: Without ``force``, an area cannot be set; the
-                error carries the area and its faults.
-            CommandNotConfirmedError: The panel did not confirm in time.
+            CommandInProgressError: Another command is running on this client.
+            SetRefusedError: The panel refused to set an area; the error
+                carries the area and its faults.
+            CommandNotConfirmedError: The command may have reached the panel
+                but was not confirmed; check the state, do not retry blindly.
         """
-        return await arm_areas(
-            self._require_connection(),
-            self._feed,
-            self._timeouts.command,
-            tuple(areas),
-            force=force,
-        )
+        with self._command_guard.hold():
+            return await arm_areas(
+                self._require_connection(),
+                self._feed,
+                self._timeouts.command,
+                tuple(areas),
+                force=force,
+            )
 
     async def disarm(self, areas: Iterable[int]) -> PanelSnapshot:
         """Unset areas and wait until each is unset.
@@ -208,14 +219,17 @@ class PyronixClient:
             NotConnectedError: No session is connected.
             ValueError: The area numbers are invalid.
             NotPermittedError: The user may not unset one of the areas.
-            CommandNotConfirmedError: The panel did not confirm in time.
+            CommandInProgressError: Another command is running on this client.
+            CommandNotConfirmedError: The command may have reached the panel
+                but was not confirmed; check the state, do not retry blindly.
         """
-        return await disarm_areas(
-            self._require_connection(),
-            self._feed,
-            self._timeouts.command,
-            tuple(areas),
-        )
+        with self._command_guard.hold():
+            return await disarm_areas(
+                self._require_connection(),
+                self._feed,
+                self._timeouts.command,
+                tuple(areas),
+            )
 
     async def close(self) -> None:
         """Say goodbye and close the socket.

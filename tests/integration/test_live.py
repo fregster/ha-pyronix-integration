@@ -2,8 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import asyncio
+from dataclasses import replace
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
+from unittest.mock import patch
 
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.exceptions import HomeAssistantError
@@ -18,6 +21,7 @@ from pyronix_cloud.testing import dump
 from pyronix_cloud.testing.fake_cloud import CloudBehaviour, FakeCloud
 from tests.integration.conftest import (
     BACKOFF_SECONDS,
+    FAST,
     PERSISTENT,
     Gate,
     link_state,
@@ -117,6 +121,33 @@ async def test_auth_failure_on_reconnect_starts_reauth(
     assert len(cloud.sessions) == 2  # no retry after the panel said no
 
 
+async def test_silent_socket_reconnects_without_reauth(
+    hass: HomeAssistant, cloud: FakeCloud, entry: MockConfigEntry
+) -> None:
+    with patch(
+        "custom_components.pyronix_cloud.client_factory.session_timeouts",
+        return_value=replace(FAST, silence=0.05),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    coordinator = entry.runtime_data
+    assert coordinator.client.connected
+    lost = asyncio.Event()
+    coordinator.client.add_disconnect_listener(lambda _error: lost.set())
+    async with asyncio.timeout(1):  # the fake cloud sends nothing: silence
+        await lost.wait()
+    await hass.async_block_till_done()
+    assert link_state(coordinator) is ConnectionState.ERROR
+    assert coordinator.last_exception is not None
+    assert coordinator.last_exception.translation_placeholders == {
+        "error": "ConnectionSilentError"
+    }
+    assert said_goodbye(cloud.sessions[0])
+    await after_backoff(hass)
+    assert len(cloud.sessions) >= 2  # a reconnect, which may go silent in turn
+    assert not reauth_started(hass)
+
+
 async def test_panel_goodbye_schedules_a_reconnect(
     hass: HomeAssistant, cloud: FakeCloud, loaded: MockConfigEntry
 ) -> None:
@@ -182,6 +213,17 @@ async def test_arm_not_permitted(loaded: MockConfigEntry) -> None:
         await loaded.runtime_data.async_disarm([4])
     assert raised.value.translation_key == "not_permitted"
     assert loaded.runtime_data.client.connected
+
+
+async def test_command_while_another_runs(loaded: MockConfigEntry) -> None:
+    client = loaded.runtime_data.client
+    other = asyncio.create_task(client.arm([0]))  # a direct library caller
+    await asyncio.sleep(0)
+    with pytest.raises(HomeAssistantError) as raised:
+        await loaded.runtime_data.async_disarm([0])
+    assert raised.value.translation_key == "command_in_progress"
+    snapshot = await other
+    assert snapshot.areas[0].status in {AreaStatus.SETTING, AreaStatus.SET}
 
 
 def test_default_backoff() -> None:

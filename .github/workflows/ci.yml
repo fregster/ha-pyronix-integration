@@ -89,7 +89,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: uv sync --frozen
-      # Library + integration tests. Coverage gates: >= 95 % overall (pyproject) and
+      # Library + integration tests. Coverage gates: 100 % overall (pyproject) and
       # 100 % for the config flow (Integration Quality Scale, checked below).
       - run: uv run pytest
       - name: Config flow coverage must be 100 %

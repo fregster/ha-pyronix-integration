@@ -9,14 +9,16 @@ from importlib.metadata import PackageNotFoundError, version
 
 from pyronix_cloud.backoff import Backoff
 from pyronix_cloud.client import PyronixClient
-from pyronix_cloud.cloud import LIVE_URL, TEST_URL
+from pyronix_cloud.cloud import LIVE_URL, TEST_URL, AppProfile
 from pyronix_cloud.errors import (
     AccessDeniedError,
     AuthenticationError,
     CloudError,
+    CommandInProgressError,
     CommandNotConfirmedError,
     CommunicationError,
     ConnectionClosedError,
+    ConnectionSilentError,
     DocumentError,
     FrameError,
     HandshakeError,
@@ -67,6 +69,7 @@ __all__ = [
     "NO_RETRY",
     "TEST_URL",
     "AccessDeniedError",
+    "AppProfile",
     "Area",
     "AreaDocument",
     "AreaEvent",
@@ -74,9 +77,11 @@ __all__ = [
     "AuthenticationError",
     "Backoff",
     "CloudError",
+    "CommandInProgressError",
     "CommandNotConfirmedError",
     "CommunicationError",
     "ConnectionClosedError",
+    "ConnectionSilentError",
     "Credentials",
     "DocumentError",
     "FaultDocument",

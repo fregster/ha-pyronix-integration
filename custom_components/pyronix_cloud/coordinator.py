@@ -17,6 +17,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from pyronix_cloud import (
     AccessDeniedError,
     AuthenticationError,
+    CommandInProgressError,
     CommandNotConfirmedError,
     NotConnectedError,
     NotPermittedError,
@@ -52,6 +53,7 @@ AUTH_ERRORS: Final = (AuthenticationError, AccessDeniedError)
 _COMMAND_ERRORS: Final[tuple[tuple[type[PyronixError], str], ...]] = (
     (NotPermittedError, "not_permitted"),
     (CommandNotConfirmedError, "command_not_confirmed"),
+    (CommandInProgressError, "command_in_progress"),
     (NotConnectedError, "not_connected"),
     (AuthenticationError, "auth_failed"),
     (AccessDeniedError, "auth_failed"),

@@ -177,6 +177,10 @@ Every message has the same envelope:
 
 - No XML escaping is applied. Values are inserted as-is.
 - If `AppUser`, `PushId` or `DeviceId` is empty, the function returns the string `"null"`.
+- *Implementation note (not protocol fact):* the library sends the app's own values for
+  `AppVersion` `6.03.001`, `AppType` `16`, `OSName` `Android`, `OSVersion` `14`,
+  `NetworkType` `Wifi` and `AppLang` `uk` by default. Callers can override them with
+  `pyronix_cloud.AppProfile` in case the cloud ever gates on app version.
 
 | CloudMsgType | Type-specific tags | Sent when | Base64? |
 |---|---|---|---|
@@ -255,6 +259,10 @@ encrypted panel heartbeat, opcode `0x20` (`HomeControl.java:508-512`).
 **No-reply timer:** `cloudNoReplyTimer = 300` seconds (`HomeControl.java:255`). It is armed on
 connect and cancelled on every received message. On expiry it calls `noReplyFromCloud()`
 (`NO_REPLY_FROM_CLOUD`).
+
+- **Library choice (not protocol):** `pyronix_cloud` likewise ends a session after
+  `Timeouts.silence` (130 s, about 2.5 heartbeats) without any inbound message, then reconnects in
+  live mode. Like the app, it sends no heartbeats of its own.
 
 ---
 
