@@ -7,9 +7,104 @@ The protocol is specified in PROTOCOL.md at the repository root.
 
 from importlib.metadata import PackageNotFoundError, version
 
+from pyronix_cloud.backoff import Backoff
+from pyronix_cloud.client import PyronixClient
+from pyronix_cloud.cloud import LIVE_URL, TEST_URL
+from pyronix_cloud.errors import (
+    AccessDeniedError,
+    AuthenticationError,
+    CloudError,
+    CommandNotConfirmedError,
+    CommunicationError,
+    ConnectionClosedError,
+    DocumentError,
+    FrameError,
+    HandshakeError,
+    NotConnectedError,
+    NotPermittedError,
+    PanelBusyError,
+    PanelOfflineError,
+    ProtocolError,
+    PyronixError,
+    PyronixTimeoutError,
+    SubscriptionExpiredError,
+    UnknownCloudReplyError,
+)
+from pyronix_cloud.models import (
+    Area,
+    AreaDocument,
+    AreaEvent,
+    AreaStatus,
+    FaultDocument,
+    Input,
+    InputDocument,
+    InputState,
+    LogDocument,
+    LogEntry,
+    Output,
+    OutputDocument,
+    PanelDocument,
+    PanelFault,
+    PanelInfo,
+    SetType,
+    UnknownDocument,
+    User,
+    UserDocument,
+)
+from pyronix_cloud.panel_state import PanelSnapshot
+from pyronix_cloud.settings import Credentials, Timeouts
+from pyronix_cloud.websocket import aiohttp_connector
+
 try:
     __version__ = version("pyronix-cloud")
 except PackageNotFoundError:  # pragma: no cover - only when run from a raw checkout
     __version__ = "0.0.0"
 
-__all__ = ["__version__"]
+__all__ = [
+    "LIVE_URL",
+    "TEST_URL",
+    "AccessDeniedError",
+    "Area",
+    "AreaDocument",
+    "AreaEvent",
+    "AreaStatus",
+    "AuthenticationError",
+    "Backoff",
+    "CloudError",
+    "CommandNotConfirmedError",
+    "CommunicationError",
+    "ConnectionClosedError",
+    "Credentials",
+    "DocumentError",
+    "FaultDocument",
+    "FrameError",
+    "HandshakeError",
+    "Input",
+    "InputDocument",
+    "InputState",
+    "LogDocument",
+    "LogEntry",
+    "NotConnectedError",
+    "NotPermittedError",
+    "Output",
+    "OutputDocument",
+    "PanelBusyError",
+    "PanelDocument",
+    "PanelFault",
+    "PanelInfo",
+    "PanelOfflineError",
+    "PanelSnapshot",
+    "ProtocolError",
+    "PyronixClient",
+    "PyronixError",
+    "PyronixTimeoutError",
+    "SetType",
+    "SubscriptionExpiredError",
+    "Timeouts",
+    "UnknownCloudReplyError",
+    "UnknownDocument",
+    "User",
+    "UserDocument",
+    "__version__",
+    "aiohttp_connector",
+]

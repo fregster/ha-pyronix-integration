@@ -38,29 +38,40 @@ unprotected, or lock out a user.
 |---|---|
 | `PROTOCOL.md` | Protocol spec, with **Observed / Inferred / Unknown** evidence labels |
 | `probe/` | Stand-alone, read-only protocol test script and offline tests |
-| `src/pyronix_cloud/` | *(planned)* Async client library. **Must not import `homeassistant`.** |
-| `custom_components/pyronix_cloud/` | *(planned)* HA integration, a thin layer over the library |
-| `tests/` | *(planned)* pytest suites for the library and the integration |
+| `src/pyronix_cloud/` | Async client library. **Must not import `homeassistant`.** |
+| `custom_components/pyronix_cloud/` | HA integration, a thin layer over the library (Apache-2.0) |
+| `tests/` | Library tests (LGPL); `tests/integration/` holds the HA tests (Apache-2.0, see REUSE.toml) |
 | `decompiled/sources/` | jadx output, for reference only (gitignored). Main files: `com/pyronix/kotlinlibhomecontrol/{HomeControl,PanelEncrypt,PanelEncryptKt}.java` |
 
-## Architecture (target)
+## Architecture
 
 ```
 custom_components/pyronix_cloud
-  config_flow.py      user step: device name, system ID, App password, user code; validates by connecting
-  coordinator.py      DataUpdateCoordinator: polls by short sessions (default) or takes pushes (persistent mode)
-  alarm_control_panel.py / binary_sensor.py / switch.py / sensor.py
-  diagnostics.py      redacted
+  config_flow.py      user/reauth/reconfigure/options; validates with one short read-only session
+  client_factory.py   builds PyronixClient from the entry (HA's aiohttp session injected)
+  coordinator.py      DataUpdateCoordinator: on-demand short sessions, one lock per panel
+  live.py             persistent mode: one open session, pushes, reconnect with back-off
+  alarm_control_panel.py / binary_sensor.py / sensor.py / diagnostics.py (redacted)
         │
         ▼
-pyronix_cloud (library)
-  cloud.py            WebSocket relay layer: <p> messages, <e> replies, heartbeats (§3)
-  frames.py           frame build/parse, seq numbers, NACK handling, transport encoding (§4.1–4.3)
-  crypto.py           fixedKey, ECDH, AES-CFB-128 with ECB-derived IV, check16 (§4.4–4.7)
-  session.py          state machine: cloud stages → handshake → data mode; reconnect + back-off
-  commands.py         opcode builders (§5)
-  models.py           dataclasses for panel/area/input/output/user/fault/log (§6)
-  testing/fake_panel  in-process fake cloud + panel for tests
+pyronix_cloud (library)                       sans-IO unless marked
+  client.py           PyronixClient: connect / arm / disarm / close, listeners      (async)
+  connection.py       drives a ProtocolSession over a WebSocket, guarantees goodbye (async)
+  panel_feed.py       session events → snapshots; waits with deadlines             (async)
+  websocket.py        WebSocket Protocol + aiohttp adapter                          (async)
+  session.py          cloud stages → handshake → login → data mode (§3, §7)
+    cloud_stages.py / panel_stages.py / session_events.py
+  link.py             encrypted panel link: handshake, seqs, NACKs (§4)
+    link_codec.py / link_nacks.py / link_events.py / announce.py
+  cloud.py            <p> requests, <e> replies, heartbeat rule (§3.3–3.4)
+  transport.py        (base64) wrapping and frame reassembly across messages (§3.2, §4.2)
+  frames.py           frame layout, check16, seq acceptance (§4.1, §4.3)
+  crypto.py           fixedKey, ECDH, AES-CFB-128 with ECB-derived IV (§4.4–4.7)
+  commands.py         opcode payloads (§5)
+  documents.py        untrusted JSON → typed documents (§6)  models.py  dataclasses/enums
+  panel_state.py      merge + de-duplicate documents into PanelSnapshot
+  area_rules.py / settings.py / backoff.py / errors.py
+  testing/            FakeCloud + FakePanel (in-memory or loopback), canned live-shaped dump
 ```
 
 **Design principles**
@@ -80,8 +91,9 @@ pyronix_cloud (library)
   be unit-tested without a network.
 - **The library has no knowledge of HA.** Typed models and a small client API:
   `connect()`, `arm(areas, force=True)`, `disarm(areas)`, `set_output()`, `omit()`, `close()`.
-- `cryptography`: import CFB from `cryptography.hazmat.decrepit.ciphers.modes` when available
-  (`modes.CFB` is deprecated).
+- `cryptography`: CFB comes from `cryptography.hazmat.decrepit.ciphers.modes` when available
+  (`modes.CFB` is deprecated). HA 2026.2 ships cryptography 46, which lacks it, so `crypto.py`
+  resolves the class at runtime; keep that working.
 - Follow HA integration quality guidelines: config flow, unique IDs (the panel ID plus the
   area/input/output number), `has_entity_name`, translations in `strings.json`, and no YAML
   config.
@@ -92,7 +104,15 @@ pyronix_cloud (library)
 uv sync                                   # create .venv from uv.lock (Python >= 3.13)
 uv run pre-commit install                 # once per clone
 uv run pre-commit run --all-files         # every gate below, as CI runs them
-uv run pytest                             # library tests + coverage gate
+uv run pytest                             # library + integration tests, coverage gate
+uv run coverage report --include='custom_components/pyronix_cloud/config_flow.py' --fail-under=100
+
+# Python 3.13 leg (HA 2026.2.3, the last HA release on 3.13; CI runs it too):
+UV_PROJECT_ENVIRONMENT=.venv-313 uv sync --frozen --python 3.13
+.venv-313/bin/python -m pytest && .venv-313/bin/python -m mypy
+
+# Fake cloud for a dev Home Assistant (System ID TESTPANL; credentials printed):
+uv run python -m pyronix_cloud.testing --port 8765
 uv run pytest probe --no-cov -o addopts=""   # probe's offline tests, no network
 uv run python probe/pyronix_probe.py --dry-run
 ```
@@ -149,6 +169,17 @@ files easy to review, test and hand to an agent with limited context.
 - **Agents: keep each change to one concern.** Don't refactor unrelated code in passing; list it
   as a follow-up instead. When you create a module, state its responsibility in the docstring
   first, then write the code.
+
+## Test environment notes
+
+- HA dropped Python 3.13 in 2026.3. The `ha` dependency group pins
+  `pytest-homeassistant-custom-component` per Python version (HA 2026.2.3 on 3.13, a current HA on
+  3.14). Integration code must use only APIs present in **both**. Bump the pins deliberately.
+- The HA pytest plugin loads for **every** test: it blocks sockets (use the in-memory
+  `FakeCloud.connector()`; loopback tests need the `socket_enabled` fixture) and fails tests that
+  leave tasks or timers behind.
+- `tests/conftest.py` gives each test a current event loop on Python 3.13 only, working around
+  the old HA plugin's sync fixtures. Remove it with 3.13 support.
 
 ## Working practices
 

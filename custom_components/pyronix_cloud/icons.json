@@ -1,0 +1,17 @@
+{
+  "entity": {
+    "sensor": {
+      "connection_state": {
+        "default": "mdi:cloud-outline",
+        "state": {
+          "connecting": "mdi:cloud-sync-outline",
+          "connected": "mdi:cloud-check-outline",
+          "error": "mdi:cloud-alert-outline"
+        }
+      },
+      "faults": {
+        "default": "mdi:alert-circle-outline"
+      }
+    }
+  }
+}
