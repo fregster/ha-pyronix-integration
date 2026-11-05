@@ -28,8 +28,8 @@ unprotected, or lock out a user.
    - Never print, log, commit or paste these values.
    - Redact them in logs (`PanelPwd`, `<z>…</z>`, the login payload `",code\n"`).
    - HA diagnostics must use `async_redact_data`.
-4. **Never commit** `apk/`, `decompiled/`, `.env`, `probe/.device_id`, packet captures, or logs
-   that contain credentials or raw session keys.
+4. **Never commit** `apk/`, `decompiled/`, `reference/`, `.env`, `probe/.device_id`, packet
+   captures, or logs that contain credentials or raw session keys.
 5. Do not try to bypass `com.pairip`, Play integrity, or the cloud's subscription checks.
 
 ## Layout
@@ -42,6 +42,7 @@ unprotected, or lock out a user.
 | `custom_components/pyronix_cloud/` | HA integration, a thin layer over the library (Apache-2.0) |
 | `tests/` | Library tests (LGPL); `tests/integration/` holds the HA tests (Apache-2.0, see REUSE.toml) |
 | `decompiled/sources/` | jadx output, for reference only (gitignored). Main files: `com/pyronix/kotlinlibhomecontrol/{HomeControl,PanelEncrypt,PanelEncryptKt}.java` |
+| `reference/` | Third-party downloads (vendor software such as InSite, manuals, firmware), one subfolder per item (gitignored) |
 
 ## Architecture
 

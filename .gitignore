@@ -2,6 +2,12 @@
 /apk/
 /decompiled/
 
+# Third-party downloads (vendor software, manuals, firmware) for reverse engineering; never commit
+/reference/
+
+# macOS Finder metadata
+.DS_Store
+
 # Secrets
 .env
 

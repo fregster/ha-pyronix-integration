@@ -75,7 +75,7 @@ src/pyronix_cloud/          Async client library, no HA dependency (published as
 src/pyronix_cloud/testing/  Fake cloud relay + panel for offline tests and dev instances
 custom_components/pyronix_cloud/   Home Assistant integration
 tests/                      Library tests; tests/integration/ holds the HA tests
-apk/, decompiled/           Local-only reverse-engineering inputs (gitignored, never committed)
+apk/, decompiled/, reference/  Local-only reverse-engineering inputs (gitignored, never committed)
 ```
 
 ## Roadmap
