@@ -29,6 +29,9 @@ NOT_READY: Final = frozenset({AreaStatus.CANNOT_SET, AreaStatus.CAN_OVERRIDE})
 REFUSED: Final = NOT_READY | {AreaStatus.SET_CANCELLED}
 """Statuses that refuse a set without force once the panel reports them."""
 
+FORCE_REFUSED: Final = frozenset({AreaStatus.CANNOT_SET, AreaStatus.SET_CANCELLED})
+"""Statuses that refuse a forced set; the panel overrides CanOverride itself."""
+
 
 def all_in(
     snapshot: PanelSnapshot, areas: tuple[int, ...], statuses: frozenset[AreaStatus]
@@ -85,8 +88,17 @@ def check_settable(snapshot: PanelSnapshot, areas: tuple[int, ...]) -> None:
             raise SetRefusedError(area)
 
 
+def refusals(*, force: bool) -> frozenset[AreaStatus]:
+    """Return the statuses that refuse a set with or without force."""
+    return FORCE_REFUSED if force else REFUSED
+
+
 def refused_area(
-    snapshot: PanelSnapshot, areas: tuple[int, ...], before: PanelSnapshot
+    snapshot: PanelSnapshot,
+    areas: tuple[int, ...],
+    before: PanelSnapshot,
+    *,
+    force: bool,
 ) -> Area | None:
     """Return the first area that newly reports a refusal, or None.
 
@@ -97,10 +109,12 @@ def refused_area(
         snapshot: The panel state now.
         areas: Area numbers of the set command.
         before: The panel state when the command was sent.
+        force: Whether the set was forced (see :func:`refusals`).
     """
+    refused = refusals(force=force)
     for number in areas:
         area = snapshot.areas.get(number)
-        if area is None or area.status not in REFUSED:
+        if area is None or area.status not in refused:
             continue
         old = before.areas.get(number)
         if old is None or old.status is not area.status:
@@ -109,13 +123,17 @@ def refused_area(
 
 
 def check_not_refused(
-    snapshot: PanelSnapshot, areas: tuple[int, ...], before: PanelSnapshot
+    snapshot: PanelSnapshot,
+    areas: tuple[int, ...],
+    before: PanelSnapshot,
+    *,
+    force: bool,
 ) -> None:
     """Raise if an area newly reports a refusal (see :func:`refused_area`).
 
     Raises:
         SetRefusedError: The panel refused to set an area.
     """
-    area = refused_area(snapshot, areas, before)
+    area = refused_area(snapshot, areas, before, force=force)
     if area is not None:
         raise SetRefusedError(area)

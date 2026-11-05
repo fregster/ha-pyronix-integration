@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Self
 from pyronix_cloud import commands
 from pyronix_cloud.area_commands import arm_areas, disarm_areas
 from pyronix_cloud.cloud import LIVE_URL, AppProfile, CloudIdentity
+from pyronix_cloud.command_guard import CommandGuard
 from pyronix_cloud.connection import Connection, open_socket
 from pyronix_cloud.errors import (
     ConnectionClosedError,
@@ -91,6 +92,7 @@ class PyronixClient:
         self._connection: Connection | None = None
         self._connected = False
         self._disconnect_listeners: list[DisconnectListener] = []
+        self._command_guard = CommandGuard()
 
     @property
     def snapshot(self) -> PanelSnapshot:
@@ -172,8 +174,10 @@ class PyronixClient:
     async def arm(self, areas: Iterable[int], *, force: bool = True) -> PanelSnapshot:
         """Set areas and wait until each is setting, set or in alarm.
 
+        Nothing is sent if every area is already setting, set or in alarm.
         Without ``force`` an area that is not ready is refused before anything
-        is sent, and a refusal the panel reports afterwards ends the wait at once.
+        is sent. A refusal the panel reports afterwards ends the wait at once:
+        CannotSet or SetCancelled, and without ``force`` also CanOverride.
 
         Args:
             areas: Area numbers.
@@ -186,17 +190,20 @@ class PyronixClient:
             NotConnectedError: No session is connected.
             ValueError: The area numbers are invalid.
             NotPermittedError: The user may not set one of the areas.
-            SetRefusedError: Without ``force``, an area cannot be set; the
-                error carries the area and its faults.
-            CommandNotConfirmedError: The panel did not confirm in time.
+            CommandInProgressError: Another command is running on this client.
+            SetRefusedError: The panel refused to set an area; the error
+                carries the area and its faults.
+            CommandNotConfirmedError: The command may have reached the panel
+                but was not confirmed; check the state, do not retry blindly.
         """
-        return await arm_areas(
-            self._require_connection(),
-            self._feed,
-            self._timeouts.command,
-            tuple(areas),
-            force=force,
-        )
+        with self._command_guard.hold():
+            return await arm_areas(
+                self._require_connection(),
+                self._feed,
+                self._timeouts.command,
+                tuple(areas),
+                force=force,
+            )
 
     async def disarm(self, areas: Iterable[int]) -> PanelSnapshot:
         """Unset areas and wait until each is unset.
@@ -212,14 +219,17 @@ class PyronixClient:
             NotConnectedError: No session is connected.
             ValueError: The area numbers are invalid.
             NotPermittedError: The user may not unset one of the areas.
-            CommandNotConfirmedError: The panel did not confirm in time.
+            CommandInProgressError: Another command is running on this client.
+            CommandNotConfirmedError: The command may have reached the panel
+                but was not confirmed; check the state, do not retry blindly.
         """
-        return await disarm_areas(
-            self._require_connection(),
-            self._feed,
-            self._timeouts.command,
-            tuple(areas),
-        )
+        with self._command_guard.hold():
+            return await disarm_areas(
+                self._require_connection(),
+                self._feed,
+                self._timeouts.command,
+                tuple(areas),
+            )
 
     async def close(self) -> None:
         """Say goodbye and close the socket.

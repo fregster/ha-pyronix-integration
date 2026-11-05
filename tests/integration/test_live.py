@@ -215,6 +215,17 @@ async def test_arm_not_permitted(loaded: MockConfigEntry) -> None:
     assert loaded.runtime_data.client.connected
 
 
+async def test_command_while_another_runs(loaded: MockConfigEntry) -> None:
+    client = loaded.runtime_data.client
+    other = asyncio.create_task(client.arm([0]))  # a direct library caller
+    await asyncio.sleep(0)
+    with pytest.raises(HomeAssistantError) as raised:
+        await loaded.runtime_data.async_disarm([0])
+    assert raised.value.translation_key == "command_in_progress"
+    snapshot = await other
+    assert snapshot.areas[0].status in {AreaStatus.SETTING, AreaStatus.SET}
+
+
 def test_default_backoff() -> None:
     # The fixtures patch the module attribute; this name is the original.
     assert 5.0 <= new_backoff().next_delay() <= 5.5

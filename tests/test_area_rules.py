@@ -10,10 +10,13 @@ import pytest
 from pyronix_cloud.area_rules import (
     ARMED,
     DISARMED,
+    FORCE_REFUSED,
+    REFUSED,
     all_in,
     check_not_refused,
     check_permitted,
     check_settable,
+    refusals,
     refused_area,
 )
 from pyronix_cloud.errors import NotPermittedError, SetRefusedError
@@ -101,14 +104,37 @@ def test_reason_without_faults_is_the_status_text() -> None:
 def test_a_new_refusal_is_found(status: AreaStatus) -> None:
     before = snapshot_of(area(0, AreaStatus.UNSET))
     after = snapshot_of(area(0, status))
-    assert refused_area(after, (0,), before) is after.areas[0]
+    assert refused_area(after, (0,), before, force=False) is after.areas[0]
     with pytest.raises(SetRefusedError):
-        check_not_refused(after, (0,), before)
+        check_not_refused(after, (0,), before, force=False)
+
+
+@pytest.mark.parametrize("status", [AreaStatus.CANNOT_SET, AreaStatus.SET_CANCELLED])
+def test_a_new_refusal_ends_a_forced_set(status: AreaStatus) -> None:
+    before = snapshot_of(area(0, AreaStatus.UNSET))
+    after = snapshot_of(area(0, status))
+    assert refused_area(after, (0,), before, force=True) is after.areas[0]
+    with pytest.raises(SetRefusedError):
+        check_not_refused(after, (0,), before, force=True)
+
+
+def test_a_forced_set_overrides_can_override() -> None:
+    before = snapshot_of(area(0, AreaStatus.UNSET))
+    after = snapshot_of(area(0, AreaStatus.CAN_OVERRIDE))
+    assert refused_area(after, (0,), before, force=True) is None
+    check_not_refused(after, (0,), before, force=True)
+
+
+def test_refusal_statuses_depend_on_force() -> None:
+    assert refusals(force=False) == REFUSED
+    assert refusals(force=True) == FORCE_REFUSED
+    assert AreaStatus.CAN_OVERRIDE not in FORCE_REFUSED
 
 
 def test_an_unchanged_status_is_not_a_new_refusal() -> None:
     stale = snapshot_of(area(0, AreaStatus.SET_CANCELLED))
-    assert refused_area(stale, (0,), stale) is None
-    check_not_refused(stale, (0,), stale)
+    for force in (False, True):
+        assert refused_area(stale, (0,), stale, force=force) is None
+        check_not_refused(stale, (0,), stale, force=force)
     setting = snapshot_of(area(0, AreaStatus.SETTING))
-    assert refused_area(setting, (0, 9), stale) is None
+    assert refused_area(setting, (0, 9), stale, force=False) is None
