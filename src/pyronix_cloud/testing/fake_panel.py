@@ -131,6 +131,11 @@ class FakePanel:
         return self.documents.areas
 
     @property
+    def session_key(self) -> bytes | None:
+        """The AES session key once agreed, so tests can check it never leaks."""
+        return self._key
+
+    @property
     def closed(self) -> bool:
         """Whether the session has ended (goodbye sent or received)."""
         return self._stage is _Stage.CLOSED

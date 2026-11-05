@@ -10,6 +10,9 @@ import sys
 from hypothesis import HealthCheck, settings
 import pytest
 
+# Every test fails if a log record reveals a fake credential or a session key.
+pytest_plugins = ["tests.leak_guard"]
+
 # Crypto-heavy properties are slow on shared CI runners; keep them deterministic and
 # free of wall-clock deadlines.
 settings.register_profile(
