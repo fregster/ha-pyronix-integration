@@ -33,6 +33,14 @@ jobs:
       - run: uv run reuse lint
       - name: Module size (single-focus files)
         run: git ls-files '*.py' | xargs uv run python tools/check_module_size.py
+      # Workflow checks, with the hook versions pinned in .pre-commit-config.yaml. The
+      # read-only token turns on zizmor's online audits (impostor commits, known vulns).
+      - name: Lint workflows (actionlint)
+        run: uv run pre-commit run actionlint --all-files
+      - name: Audit workflows (zizmor)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run pre-commit run zizmor --all-files
 
   secrets:
     name: Secret scan

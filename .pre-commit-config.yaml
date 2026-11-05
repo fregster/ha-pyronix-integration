@@ -42,6 +42,18 @@ repos:
     hooks:
       - id: reuse-lint-file
 
+  # GitHub Actions workflows: syntax/type checks and security audit.
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.32.0
+    hooks:
+      - id: zizmor
+        args: [--no-progress, --min-severity, low]
+
   # mypy runs in the project environment so it sees the real dependencies.
   - repo: local
     hooks:
