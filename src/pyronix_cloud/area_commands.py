@@ -57,24 +57,17 @@ async def arm_areas(
     check_permitted(before, numbers, set_areas=True)
     if not force:
         check_settable(before, numbers)
-    if force:
-        return await _send_and_wait(
-            connection,
-            feed,
-            confirm_within,
-            payload,
-            lambda s: all_in(s, numbers, ARMED),
-        )
     snapshot = await _send_and_wait(
         connection,
         feed,
         confirm_within,
         payload,
         lambda s: (
-            refused_area(s, numbers, before) is not None or all_in(s, numbers, ARMED)
+            refused_area(s, numbers, before, force=force) is not None
+            or all_in(s, numbers, ARMED)
         ),
     )
-    check_not_refused(snapshot, numbers, before)
+    check_not_refused(snapshot, numbers, before, force=force)
     return snapshot
 
 

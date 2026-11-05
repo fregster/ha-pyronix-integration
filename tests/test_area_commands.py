@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Paul Fryer
 # SPDX-License-Identifier: LGPL-3.0-or-later
-"""Set/unset commands: once a command may have been sent, failures are unknown."""
+"""Set/unset commands: unknown outcomes and forced-set refusals."""
 
 from __future__ import annotations
 
@@ -18,7 +18,9 @@ from pyronix_cloud.errors import (
     NotConnectedError,
     PyronixError,
     PyronixTimeoutError,
+    SetRefusedError,
 )
+from pyronix_cloud.models import AreaStatus
 from pyronix_cloud.not_polling_retry import NO_RETRY
 from pyronix_cloud.testing import dump
 from pyronix_cloud.testing.fake_cloud import FakeCloud
@@ -171,4 +173,32 @@ async def test_cancellation_propagates_unchanged() -> None:
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
+    await client.close()
+
+
+# --- a forced set ends at once when the panel refuses it ----------------------
+
+
+@pytest.mark.parametrize("status", [4, 6])
+async def test_a_forced_set_fails_fast_on_a_refusal(status: int) -> None:
+    _, client = await open_client(PanelBehaviour(set_statuses=(status,)))
+    async with asyncio.timeout(5):
+        with pytest.raises(SetRefusedError) as raised:
+            await client.arm([0], force=True)
+    assert raised.value.area.status is AreaStatus(status)
+    assert client.connected
+    await client.close()
+
+
+async def test_a_forced_set_overrides_can_override() -> None:
+    _, client = await open_client(PanelBehaviour(set_statuses=(5, 3)))
+    snapshot = await client.arm([0], force=True)
+    assert snapshot.areas[0].status is AreaStatus.SETTING
+    await client.close()
+
+
+async def test_a_forced_set_ignores_a_stale_cancelled_set() -> None:
+    _, client = await open_client(areas={0: 6})
+    snapshot = await client.arm([0], force=True)
+    assert snapshot.areas[0].status in {AreaStatus.SETTING, AreaStatus.SET}
     await client.close()

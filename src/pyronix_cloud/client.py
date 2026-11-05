@@ -171,7 +171,8 @@ class PyronixClient:
         """Set areas and wait until each is setting, set or in alarm.
 
         Without ``force`` an area that is not ready is refused before anything
-        is sent, and a refusal the panel reports afterwards ends the wait at once.
+        is sent. A refusal the panel reports afterwards ends the wait at once:
+        CannotSet or SetCancelled, and without ``force`` also CanOverride.
 
         Args:
             areas: Area numbers.
@@ -185,8 +186,8 @@ class PyronixClient:
             ValueError: The area numbers are invalid.
             NotPermittedError: The user may not set one of the areas.
             CommandInProgressError: Another command is running on this client.
-            SetRefusedError: Without ``force``, an area cannot be set; the
-                error carries the area and its faults.
+            SetRefusedError: The panel refused to set an area; the error
+                carries the area and its faults.
             CommandNotConfirmedError: The command may have reached the panel
                 but was not confirmed; check the state, do not retry blindly.
         """
