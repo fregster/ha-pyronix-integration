@@ -1,0 +1,34 @@
+name: Dependency audit
+
+# Scans uv.lock with OSV-Scanner, which reads uv.lock natively (osv-scanner v2), so every
+# locked version is checked, including the separate Python 3.13 and 3.14 resolutions.
+# Results go to the Security tab; the job fails while any known vulnerability is locked.
+
+on:
+  pull_request:
+    paths:
+      - uv.lock
+      - pyproject.toml
+      - .github/workflows/dependency-audit.yml
+  schedule:
+    # Daily, so advisories published after a merge are caught.
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  osv-scan:
+    name: OSV-Scanner (uv.lock)
+    permissions:
+      actions: read # the SARIF upload reads workflow run details
+      contents: read # check out the lock file
+      security-events: write # upload results to code scanning
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+    with:
+      scan-args: |-
+        --lockfile=uv.lock

@@ -10,16 +10,25 @@ on:
   push:
     tags: ["v*"]
 
-permissions:
-  contents: read
+# Nothing by default; each job grants only what it needs.
+permissions: {}
+
+# Never run two releases at once, and never cancel one half-way through publishing.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 jobs:
   build:
     name: Build distributions
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: "3.13"
       - name: Tag must match the project version
@@ -30,7 +39,25 @@ jobs:
             exit 1
           }
       - run: uv build
-      - uses: actions/upload-artifact@v7.0.2
+      - name: Check distribution metadata
+        run: uvx twine@7.0.0 check --strict dist/*
+      - name: Check wheel contents
+        run: uvx check-wheel-contents@0.6.3 dist/*.whl
+      # The library dists must never carry the HA integration, vendor material, secrets
+      # or captures. The hatch config restricts what is packed; this proves it.
+      - name: Distributions contain no forbidden paths
+        run: |
+          set -euo pipefail
+          for sdist in dist/*.tar.gz; do tar -tzf "${sdist}"; done > dist-files.txt
+          for wheel in dist/*.whl; do unzip -Z1 "${wheel}"; done >> dist-files.txt
+          cat dist-files.txt
+          pattern='(^|/)(apk|decompiled|reference|custom_components)/|(^|/)\.env$|(^|/)\.device_id$|\.(log|pcap|pcapng)$'
+          if grep -E "${pattern}" dist-files.txt; then
+            echo "::error::forbidden paths in the distributions (listed above)"
+            exit 1
+          fi
+          rm dist-files.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
           path: dist/
@@ -42,13 +69,13 @@ jobs:
     runs-on: ubuntu-latest
     environment: testpypi
     permissions:
-      id-token: write
+      id-token: write # PyPI Trusted Publishing (OIDC); no stored token
     steps:
-      - uses: actions/download-artifact@v8.0.2
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: dist
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@v1.14.3
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           repository-url: https://test.pypi.org/legacy/
 
@@ -58,10 +85,10 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      id-token: write
+      id-token: write # PyPI Trusted Publishing (OIDC); no stored token
     steps:
-      - uses: actions/download-artifact@v8.0.2
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: dist
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@v1.14.3
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3

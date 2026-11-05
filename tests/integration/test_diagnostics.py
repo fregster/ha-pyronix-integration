@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import base64
 import json
 from typing import TYPE_CHECKING
 
@@ -33,7 +34,7 @@ OPTIONS = {**PERSISTENT, CONF_ARM_ACCESS: "pin", CONF_PIN_HASH: PIN_HASH}
 SITE_NAME = "12 Acacia Avenue"
 SECRETS = [
     SITE_NAME,
-    *(str(value) for value in ENTRY_DATA.values()),
+    *(str(value) for value in ENTRY_DATA.values()),  # app password and user code
     CLOUD_URL,
     PIN_HASH,
     dump.PANEL_ID,
@@ -65,6 +66,12 @@ async def test_diagnostics_are_redacted(hass: HomeAssistant, cloud: FakeCloud) -
     text = json.dumps(result)
     for secret in SECRETS:
         assert secret not in text
+    panel = cloud.sessions[0].panel
+    assert panel is not None
+    key = panel.session_key
+    assert key is not None
+    for form in (key.hex(), key.hex().upper(), base64.b64encode(key).decode()):
+        assert form not in text
     assert set(result["entry"]["data"].values()) == {REDACTED}
     assert result["entry"]["options"] == {
         **PERSISTENT,

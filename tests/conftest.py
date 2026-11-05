@@ -5,13 +5,20 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 
 from hypothesis import HealthCheck, settings
+from hypothesis.database import DirectoryBasedExampleDatabase
 import pytest
 
+# Every test fails if a log record reveals a fake credential or a session key.
+pytest_plugins = ["tests.leak_guard"]
+
 # Crypto-heavy properties are slow on shared CI runners; keep them deterministic and
-# free of wall-clock deadlines.
+# free of wall-clock deadlines. pytest-randomly shuffles test order and reseeds the
+# global `random`, but derandomize=True derives each test's seed from the test itself,
+# so the generated examples stay identical whatever --randomly-seed is.
 settings.register_profile(
     "default",
     deadline=None,
@@ -19,7 +26,18 @@ settings.register_profile(
     max_examples=200,
     suppress_health_check=[HealthCheck.too_slow],
 )
-settings.load_profile("default")
+# Scheduled deep run (.github/workflows/nightly.yml): fresh random examples each night,
+# many more of them, and a database so a failure can be replayed from the artifact.
+settings.register_profile(
+    "nightly",
+    deadline=None,
+    derandomize=False,
+    max_examples=5000,
+    database=DirectoryBasedExampleDatabase(".hypothesis/examples"),
+    print_blob=True,
+    suppress_health_check=[HealthCheck.too_slow],
+)
+settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "default"))
 
 
 _SYNC_LOOP = pytest.StashKey[asyncio.AbstractEventLoop]()

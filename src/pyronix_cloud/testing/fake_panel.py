@@ -9,7 +9,9 @@ payload is the rejected header. The session key comes from the panel's own app
 password, so a client with the wrong password cannot get its login accepted.
 
 Area states changed by set/unset commands are kept in :attr:`FakePanel.areas`;
-pass the same dict to several panels to keep them across sessions.
+pass the same dict to several panels to keep them across sessions. The type of
+every authenticated frame and the payload of every data-mode command are recorded,
+so tests can prove which commands a flow sent.
 """
 
 from __future__ import annotations
@@ -112,6 +114,7 @@ class FakePanel:
             self.behaviour.documents, {} if areas is None else areas
         )
         self.received_commands: list[bytes] = []
+        self.received_frame_types: list[str] = []
         self.goodbye_received = False
         self.logged_in = False
         self._stage = _Stage.ANNOUNCE
@@ -126,6 +129,11 @@ class FakePanel:
     def areas(self) -> dict[int, int]:
         """Area status overrides set by commands (area number to ``V``)."""
         return self.documents.areas
+
+    @property
+    def session_key(self) -> bytes | None:
+        """The AES session key once agreed, so tests can check it never leaks."""
+        return self._key
 
     @property
     def closed(self) -> bool:
@@ -148,6 +156,7 @@ class FakePanel:
             frame = self._open(raw)
         except FrameError:
             return [self._send("c", (raw + bytes(HEADER_LEN))[:HEADER_LEN])]
+        self.received_frame_types.append(frame.type)
         if frame.type == "C":
             return [self._last_tx] if self._last_tx is not None else []
         if frame.type in {"E", "F"}:

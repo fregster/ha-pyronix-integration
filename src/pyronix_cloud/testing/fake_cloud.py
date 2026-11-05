@@ -105,6 +105,11 @@ class FakeCloud:
         self._endpoints: list[_Endpoint] = []
         self._runner: web.AppRunner | None = None
 
+    @property
+    def panels(self) -> list[FakePanel]:
+        """The panel of every session that reached one, in session order."""
+        return [s.panel for s in self.sessions if s.panel is not None]
+
     def connector(self) -> Connector:
         """Return a connector that opens in-memory sockets to this relay."""
 

@@ -1,0 +1,46 @@
+# Dependabot version updates. Licensing comes from REUSE.toml (.github/**).
+# Minor and patch bumps are grouped into one PR per ecosystem; majors stay separate.
+# The cooldown lets a new release age a few days before a PR proposes it.
+version: 2
+
+updates:
+  # Workflow actions, pinned by commit SHA with a version comment.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      actions-minor-patch:
+        update-types: [minor, patch]
+
+  # Python dependencies in pyproject.toml and uv.lock.
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      python-minor-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Pinned once per Python version in the `ha` group (HA 2026.2.3 on 3.13, a
+      # current HA on 3.14). Each pin selects a Home Assistant release the
+      # integration must support, so bumps are deliberate and done by hand.
+      - dependency-name: pytest-homeassistant-custom-component
+
+  # Hook revisions in .pre-commit-config.yaml.
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      hooks-minor-patch:
+        update-types: [minor, patch]

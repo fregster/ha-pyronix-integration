@@ -5,8 +5,8 @@ on:
     branches: [main]
   pull_request:
 
-permissions:
-  contents: read
+# Nothing by default; each job grants only what it needs.
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -16,9 +16,13 @@ jobs:
   lint:
     name: Lint, format, types, licences
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: "3.13"
       - run: uv sync --frozen
@@ -29,13 +33,24 @@ jobs:
       - run: uv run reuse lint
       - name: Module size (single-focus files)
         run: git ls-files '*.py' | xargs uv run python tools/check_module_size.py
+      # Workflow checks, with the hook versions pinned in .pre-commit-config.yaml. The
+      # read-only token turns on zizmor's online audits (impostor commits, known vulns).
+      - name: Lint workflows (actionlint)
+        run: uv run pre-commit run actionlint --all-files
+      - name: Audit workflows (zizmor)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run pre-commit run zizmor --all-files
 
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
       # The gitleaks CLI scans the full history. gitleaks-action is not used because it
       # breaks on a branch's first push (empty "before" SHA). Keep the version in step
@@ -43,20 +58,34 @@ jobs:
       - name: Scan full history with gitleaks
         env:
           GITLEAKS_VERSION: "8.30.0"
+        # Verify the tarball against the release's checksums file before unpacking it.
         run: |
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
-          ./gitleaks git --redact --no-banner --exit-code 1 .
+          set -euo pipefail
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          sums="gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          dir="$(mktemp -d)"
+          curl -sSfL -o "${dir}/${tarball}" "${base}/${tarball}"
+          curl -sSfL -o "${dir}/${sums}" "${base}/${sums}"
+          grep -F "  ${tarball}" "${dir}/${sums}" > "${dir}/expected.txt"
+          (cd "${dir}" && sha256sum --check --strict expected.txt)
+          tar -xzf "${dir}/${tarball}" -C "${dir}" gitleaks
+          "${dir}/gitleaks" git --redact --no-banner --exit-code 1 .
 
   test:
     name: Tests (Python ${{ matrix.python }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
         python: ["3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: ${{ matrix.python }}
       - run: uv sync --frozen
@@ -71,14 +100,20 @@ jobs:
   hassfest:
     name: hassfest
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       # home-assistant/actions publishes no release tags for hassfest; pin the commit.
       - uses: home-assistant/actions/hassfest@86d4564712fa02543c808e3a693dd04f9d3f8361 # master 2026-10-26
 
   hacs:
     name: HACS validation
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       # hacs/action's last tag is from 2022 and its docs point at main; pin the commit.
       - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa # main 2026-06-08
@@ -87,3 +122,22 @@ jobs:
           comment: false
           # Brand images live in home-assistant/brands, submitted after the first release.
           ignore: brands
+
+  test-devmode:
+    name: Tests (asyncio debug mode)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.14"
+      - run: uv sync --frozen
+      # Python dev mode turns on asyncio debug: never-awaited coroutines, unclosed
+      # transports and non-thread-safe calls become warnings, which pytest makes errors.
+      - name: Tests in Python dev mode
+        env:
+          PYTHONDEVMODE: "1"
+          PYTHONASYNCIODEBUG: "1"
+        run: uv run pytest
