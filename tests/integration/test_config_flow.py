@@ -9,20 +9,27 @@ from typing import TYPE_CHECKING, Any
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.data_entry_flow import FlowResultType
 import pytest
+import voluptuous as vol
 
 from custom_components.pyronix_cloud.const import (
     CONF_ADVANCED,
+    CONF_ALLOW_AUTOMATIONS,
     CONF_APP_PASSWORD,
     CONF_APP_USER,
+    CONF_ARM_ACCESS,
     CONF_CLOUD_URL,
     CONF_DEVICE_ID,
     CONF_LIVE_UPDATES,
     CONF_MODE,
     CONF_PANEL_ID,
+    CONF_PIN,
+    CONF_PIN_HASH,
     CONF_USER_CODE,
+    CONF_USERS,
     DOMAIN,
     MODE_PERSISTENT,
 )
+from custom_components.pyronix_cloud.pin_hash import pin_matches
 from pyronix_cloud import LIVE_URL, CommunicationError
 from pyronix_cloud.testing import dump
 from pyronix_cloud.testing.fake_cloud import CloudBehaviour, FakeCloud
@@ -60,6 +67,22 @@ async def submit(
     return await hass.config_entries.flow.async_configure(flow["flow_id"], user_input)
 
 
+ANYONE = {CONF_ARM_ACCESS: "anyone"}
+
+
+async def create(
+    hass: HomeAssistant,
+    flow: ConfigFlowResult,
+    user_input: dict[str, Any],
+    access: dict[str, Any] = ANYONE,
+) -> ConfigFlowResult:
+    """Submit the user step, then the access step."""
+    step = await submit(hass, flow, user_input)
+    assert step["type"] is FlowResultType.FORM
+    assert step["step_id"] == "access"
+    return await submit(hass, step, access)
+
+
 def field_names(result: ConfigFlowResult) -> list[str]:
     schema = result["data_schema"]
     assert schema is not None
@@ -78,7 +101,7 @@ async def test_user_creates_entry(hass: HomeAssistant, cloud: FakeCloud) -> None
         CONF_LIVE_UPDATES,
         CONF_ADVANCED,
     ]
-    result = await submit(hass, form, USER_INPUT)
+    result = await create(hass, form, USER_INPUT, {**ANYONE, CONF_PIN: ""})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Pyronix alarm"
     data = result["data"]
@@ -86,7 +109,7 @@ async def test_user_creates_entry(hass: HomeAssistant, cloud: FakeCloud) -> None
     assert CONF_CLOUD_URL not in data  # the default relay is not stored
     assert CONF_ADVANCED not in data
     assert CONF_LIVE_UPDATES not in data
-    assert result["options"] == {}  # on-demand by default
+    assert result["options"] == ANYONE  # on-demand by default
     assert cloud.sessions[0].url == LIVE_URL
     assert len(data[CONF_DEVICE_ID]) == 16
     int(data[CONF_DEVICE_ID], 16)
@@ -101,12 +124,79 @@ async def test_user_creates_entry(hass: HomeAssistant, cloud: FakeCloud) -> None
     assert session.panel.received_commands == []
 
 
+async def test_access_step_defaults_to_pin(hass: HomeAssistant) -> None:
+    step = await submit(hass, await start(hass), USER_INPUT)
+    assert step["step_id"] == "access"
+    assert field_names(step) == [
+        CONF_ARM_ACCESS,
+        CONF_PIN,
+        CONF_USERS,
+        CONF_ALLOW_AUTOMATIONS,
+    ]
+    schema = step["data_schema"]
+    assert schema is not None
+    defaults = {
+        str(key): key.default()
+        for key in schema.schema
+        if key.default is not vol.UNDEFINED
+    }
+    assert defaults == {
+        CONF_ARM_ACCESS: "pin",
+        CONF_USERS: [],
+        CONF_ALLOW_AUTOMATIONS: False,
+    }
+    hass.config_entries.flow.async_abort(step["flow_id"])
+
+
+@pytest.mark.parametrize("pin", ["", "123", "123456789", "12ab", "١٢٣٤"])
+async def test_access_step_rejects_a_bad_pin(hass: HomeAssistant, pin: str) -> None:
+    step = await submit(hass, await start(hass), USER_INPUT)
+    access = {CONF_ARM_ACCESS: "pin", CONF_PIN: pin}
+    result = await submit(hass, step, access)
+    assert result["step_id"] == "access"
+    assert result["errors"] == {CONF_PIN: "invalid_pin"}
+    assert not pin or pin not in str(result)  # never echoed back
+    hass.config_entries.flow.async_abort(step["flow_id"])
+
+
+async def test_access_step_stores_only_a_pin_hash(hass: HomeAssistant) -> None:
+    access = {CONF_ARM_ACCESS: "pin", CONF_PIN: "47110815"}
+    result = await create(hass, await start(hass), USER_INPUT, access)
+    options = result["options"]
+    assert set(options) == {CONF_ARM_ACCESS, CONF_PIN_HASH}
+    assert options[CONF_ARM_ACCESS] == "pin"
+    assert "47110815" not in str(result["result"].as_dict())
+    assert pin_matches("47110815", options[CONF_PIN_HASH])
+
+
+async def test_access_step_users(hass: HomeAssistant) -> None:
+    alice = await hass.auth.async_create_user("Alice")
+    await hass.auth.async_create_system_user("Robot")
+    step = await submit(hass, await start(hass), USER_INPUT)
+    schema = step["data_schema"]
+    assert schema is not None
+    users = next(v for k, v in schema.schema.items() if str(k) == CONF_USERS)
+    labels = [option["label"] for option in users.config["options"]]
+    assert "Alice" in labels
+    assert "Robot" not in labels
+    failed = await submit(hass, step, {CONF_ARM_ACCESS: "users", CONF_USERS: []})
+    assert failed["errors"] == {CONF_USERS: "no_users"}
+    access = {
+        CONF_ARM_ACCESS: "users",
+        CONF_USERS: [alice.id],
+        CONF_ALLOW_AUTOMATIONS: True,
+    }
+    result = await submit(hass, failed, access)
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["options"] == access
+
+
 async def test_live_updates_starts_persistent(hass: HomeAssistant) -> None:
-    result = await submit(
+    result = await create(
         hass, await start(hass), {**USER_INPUT, CONF_LIVE_UPDATES: True}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["options"] == {CONF_MODE: MODE_PERSISTENT}
+    assert result["options"] == {CONF_MODE: MODE_PERSISTENT, **ANYONE}
     assert CONF_LIVE_UPDATES not in result["data"]
     await hass.config_entries.async_unload(result["result"].entry_id)
 
@@ -119,7 +209,7 @@ async def test_device_id_is_kept_across_retries(
     failed = await submit(hass, form, USER_INPUT)
     assert failed["errors"] == {"base": "cannot_connect"}
     gate.error = None
-    created = await submit(hass, failed, USER_INPUT)
+    created = await create(hass, failed, USER_INPUT)
     assert created["type"] is FlowResultType.CREATE_ENTRY
     other = await submit(hass, await start(hass), USER_INPUT)
     assert other["type"] is FlowResultType.ABORT
@@ -134,7 +224,7 @@ async def test_device_id_is_kept_across_retries(
     ],
 )
 async def test_title_from_site_name(hass: HomeAssistant, title: str) -> None:
-    result = await submit(hass, await start(hass), USER_INPUT)
+    result = await create(hass, await start(hass), USER_INPUT)
     assert result["title"] == title
 
 
@@ -162,7 +252,7 @@ async def test_invalid_system_id(
 async def test_advanced_url_accepted(
     hass: HomeAssistant, cloud: FakeCloud, url: str
 ) -> None:
-    result = await submit(hass, await start(hass), with_url(url))
+    result = await create(hass, await start(hass), with_url(url))
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_CLOUD_URL] == url
     assert cloud.sessions[0].url == url
@@ -208,7 +298,7 @@ async def test_cloud_errors(
     assert result["errors"] == {"base": error}
     assert cloud.sessions[0].closed_by_client
     cloud.behaviour = CloudBehaviour()
-    assert (await submit(hass, result, USER_INPUT))["type"] is (
+    assert (await create(hass, result, USER_INPUT))["type"] is (
         FlowResultType.CREATE_ENTRY
     )
 

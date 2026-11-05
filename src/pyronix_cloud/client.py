@@ -5,9 +5,9 @@
 :class:`PyronixClient` opens a WebSocket through an injected
 :data:`~pyronix_cloud.websocket.Connector`, runs the protocol session to the end
 of the login dump (:mod:`pyronix_cloud.connection`), keeps the panel state
-(:mod:`pyronix_cloud.panel_feed`) and sends set/unset commands, waiting for the
-panel to confirm them. It never logs the app password, the user code or the
-login payload.
+(:mod:`pyronix_cloud.panel_feed`) and sends set/unset commands through
+:mod:`pyronix_cloud.area_commands`, which waits for the panel to confirm them.
+It never logs the app password, the user code or the login payload.
 """
 
 from __future__ import annotations
@@ -17,11 +17,10 @@ import logging
 from typing import TYPE_CHECKING, Self
 
 from pyronix_cloud import commands
-from pyronix_cloud.area_rules import ARMED, DISARMED, all_in, check_permitted
+from pyronix_cloud.area_commands import arm_areas, disarm_areas
 from pyronix_cloud.cloud import LIVE_URL, CloudIdentity
 from pyronix_cloud.connection import Connection, open_socket
 from pyronix_cloud.errors import (
-    CommandNotConfirmedError,
     ConnectionClosedError,
     NotConnectedError,
     PyronixError,
@@ -35,7 +34,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
     from types import TracebackType
 
-    from pyronix_cloud.models import AreaStatus
     from pyronix_cloud.panel_feed import SnapshotListener
     from pyronix_cloud.panel_state import PanelSnapshot
     from pyronix_cloud.websocket import Connector
@@ -170,6 +168,9 @@ class PyronixClient:
     async def arm(self, areas: Iterable[int], *, force: bool = True) -> PanelSnapshot:
         """Set areas and wait until each is setting, set or in alarm.
 
+        Without ``force`` an area that is not ready is refused before anything
+        is sent, and a refusal the panel reports afterwards ends the wait at once.
+
         Args:
             areas: Area numbers.
             force: Omit open inputs and set anyway (as the app does).
@@ -181,14 +182,17 @@ class PyronixClient:
             NotConnectedError: No session is connected.
             ValueError: The area numbers are invalid.
             NotPermittedError: The user may not set one of the areas.
+            SetRefusedError: Without ``force``, an area cannot be set; the
+                error carries the area and its faults.
             CommandNotConfirmedError: The panel did not confirm in time.
         """
-        numbers = tuple(areas)
-        connection = self._require_connection()
-        payload = commands.set_areas(numbers, force=force)
-        check_permitted(self.snapshot, numbers, set_areas=True)
-        await connection.send_command(payload)
-        return await self._confirm(numbers, ARMED)
+        return await arm_areas(
+            self._require_connection(),
+            self._feed,
+            self._timeouts.command,
+            tuple(areas),
+            force=force,
+        )
 
     async def disarm(self, areas: Iterable[int]) -> PanelSnapshot:
         """Unset areas and wait until each is unset.
@@ -206,14 +210,12 @@ class PyronixClient:
             NotPermittedError: The user may not unset one of the areas.
             CommandNotConfirmedError: The panel did not confirm in time.
         """
-        numbers = tuple(areas)
-        connection = self._require_connection()
-        payload = commands.unset_areas(numbers)
-        check_permitted(self.snapshot, numbers, set_areas=False)
-        if all_in(self.snapshot, numbers, DISARMED):
-            return self.snapshot
-        await connection.send_command(payload)
-        return await self._confirm(numbers, DISARMED)
+        return await disarm_areas(
+            self._require_connection(),
+            self._feed,
+            self._timeouts.command,
+            tuple(areas),
+        )
 
     async def close(self) -> None:
         """Say goodbye and close the socket.
@@ -248,16 +250,6 @@ class PyronixClient:
             msg = "the panel session is not connected"
             raise NotConnectedError(msg)
         return self._connection
-
-    async def _confirm(
-        self, numbers: tuple[int, ...], statuses: frozenset[AreaStatus]
-    ) -> PanelSnapshot:
-        """Wait until every area in ``numbers`` reaches one of ``statuses``."""
-        return await self._feed.wait_until(
-            lambda snapshot: all_in(snapshot, numbers, statuses),
-            self._timeouts.command,
-            lambda: CommandNotConfirmedError(f"areas {list(numbers)} not confirmed"),
-        )
 
     def _on_end(self, error: PyronixError | None) -> None:
         """Record that the session ended and tell the disconnect listeners."""

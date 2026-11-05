@@ -27,6 +27,7 @@ from pyronix_cloud.errors import (
     ProtocolError,
     PyronixError,
     PyronixTimeoutError,
+    SetRefusedError,
     SubscriptionExpiredError,
     UnknownCloudReplyError,
 )
@@ -101,6 +102,7 @@ __all__ = [
     "PyronixError",
     "PyronixTimeoutError",
     "RetryPolicy",
+    "SetRefusedError",
     "SetType",
     "SubscriptionExpiredError",
     "Timeouts",

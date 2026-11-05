@@ -8,6 +8,11 @@ contain the app password, the user code or session keys.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pyronix_cloud.models import Area
+
 
 class PyronixError(Exception):
     """Base class for every error raised by this library."""
@@ -73,6 +78,30 @@ class AuthenticationError(PyronixError):
 
 class NotPermittedError(PyronixError):
     """The logged-in user may not set or unset the requested areas."""
+
+
+class SetRefusedError(PyronixError):
+    """The panel will not set an area: it is not ready, or it cancelled the set.
+
+    Attributes:
+        area: The area as the panel last reported it, with its faults.
+    """
+
+    def __init__(self, area: Area) -> None:
+        """Record the refused area; the message names it and the reason."""
+        self.area = area
+        super().__init__(
+            f"area {area.number} ({area.name}) cannot be set: {self.reason}"
+        )
+
+    @property
+    def reason(self) -> str:
+        """Why: the area's fault texts, else its status text or status name."""
+        return (
+            ", ".join(self.area.faults)
+            or self.area.status_text
+            or self.area.status.name
+        )
 
 
 class NotConnectedError(PyronixError):

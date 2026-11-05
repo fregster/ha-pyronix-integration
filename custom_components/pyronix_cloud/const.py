@@ -43,12 +43,46 @@ DEFAULT_SCAN_INTERVAL: Final = 2
 MIN_SCAN_INTERVAL: Final = 1
 MAX_SCAN_INTERVAL: Final = 60
 
+# Who may arm and disarm (options; chosen during setup and in the options flow).
+CONF_ARM_ACCESS: Final = "arm_access"
+"""Which check guards arm and disarm; an entry without it allows anyone."""
+CONF_PIN: Final = "pin"
+"""Form field for a new PIN; only its salted hash is stored."""
+CONF_PIN_HASH: Final = "pin_hash"
+"""Salted scrypt hash of the PIN (see pin_hash.py)."""
+CONF_USERS: Final = "users"
+"""IDs of the Home Assistant users who may arm and disarm."""
+CONF_ALLOW_AUTOMATIONS: Final = "allow_automations"
+"""In users mode, also allow calls with no user (automations and scripts)."""
+CONF_ALWAYS_FORCE_ARM: Final = "always_force_arm"
+"""Make the normal arm actions force-arm (omit open inputs)."""
+PIN_MIN_LENGTH: Final = 4
+PIN_MAX_LENGTH: Final = 8
+
+SERVICE_FORCE_ARM: Final = "force_arm"
+ATTR_MODE: Final = "mode"
+
 LEVEL_MODES: Final[dict[str, AlarmControlPanelState]] = {
     "A": AlarmControlPanelState.ARMED_AWAY,
     "B": AlarmControlPanelState.ARMED_NIGHT,
     "C": AlarmControlPanelState.ARMED_CUSTOM_BYPASS,
 }
 """Home Assistant arm mode of each set level, by area letter."""
+
+FORCE_ARM_MODES: Final[dict[str, AlarmControlPanelState]] = {
+    "away": AlarmControlPanelState.ARMED_AWAY,
+    "night": AlarmControlPanelState.ARMED_NIGHT,
+    "custom_bypass": AlarmControlPanelState.ARMED_CUSTOM_BYPASS,
+}
+"""The ``mode`` field of the force_arm action and the arm mode it stands for."""
+
+
+class ArmAccess(StrEnum):
+    """Who may arm and disarm the panel from Home Assistant."""
+
+    PIN = "pin"
+    USERS = "users"
+    ANYONE = "anyone"
 
 
 class ConnectionState(StrEnum):

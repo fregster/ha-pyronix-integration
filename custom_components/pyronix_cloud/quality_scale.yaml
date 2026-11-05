@@ -1,8 +1,8 @@
 rules:
   # Bronze
   action-setup:
-    status: exempt
-    comment: This integration does not register any service actions of its own.
+    status: done
+    comment: pyronix_cloud.force_arm is registered in async_setup (services.py).
   appropriate-polling: done
   brands:
     status: todo
@@ -16,8 +16,8 @@ rules:
       pyronix-cloud lives in this repository (src/) under an OSI licence but is
       not published to PyPI with a tagged CI release yet (README roadmap step 4).
   docs-actions:
-    status: exempt
-    comment: This integration does not register any service actions of its own.
+    status: done
+    comment: The README section "Arming and force arming" documents force_arm.
   docs-conditions:
     status: exempt
     comment: This integration does not provide any conditions.
@@ -99,10 +99,11 @@ rules:
   icon-translations: done
   reconfiguration-flow: done
   repair-issues:
-    status: exempt
+    status: done
     comment: |
-      The only user-fixable failure is rejected credentials, which starts the
-      reauthentication flow instead of raising a repair issue.
+      Entries without an arm/disarm access rule raise a repair issue that asks
+      an admin to choose one (access_issue.py). Rejected credentials start the
+      reauthentication flow instead.
   stale-devices:
     status: exempt
     comment: |

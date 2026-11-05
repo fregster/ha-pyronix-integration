@@ -56,6 +56,22 @@
           "app_password": "The app password your installer set on the panel.",
           "user_code": "Your keypad user code."
         }
+      },
+      "access": {
+        "title": "Who can arm and disarm",
+        "description": "Choose who may arm and disarm the panel from Home Assistant. You can change this later in the integration's options.",
+        "data": {
+          "arm_access": "Who can arm and disarm",
+          "pin": "PIN",
+          "users": "Users",
+          "allow_automations": "Allow automations and scripts"
+        },
+        "data_description": {
+          "arm_access": "PIN: anyone who enters the PIN in Home Assistant. Users: only the users you choose below. Anyone: no check at all, so every Home Assistant user, automation and script can disarm the alarm.",
+          "pin": "4 to 8 digits, asked for on every arm, disarm and force arm. It is separate from your keypad code (it may be the same number). Home Assistant stores only a salted hash of it.",
+          "users": "In users mode, the Home Assistant users who may arm and disarm.",
+          "allow_automations": "In users mode, also allow automations and scripts, which act without a user. In PIN mode they must send the PIN as the code."
+        }
       }
     },
     "error": {
@@ -68,7 +84,9 @@
       "invalid_system_id": "The System ID must be exactly 8 characters.",
       "invalid_url": "Use a wss:// URL, or ws:// only for localhost or 127.0.0.1.",
       "invalid_user_code": "The user code must be 1 to 8 digits.",
-      "invalid_characters": "This field must not contain <, > or &."
+      "invalid_characters": "This field must not contain <, > or &.",
+      "invalid_pin": "Enter a PIN of 4 to 8 digits.",
+      "no_users": "Choose at least one user."
     },
     "abort": {
       "already_configured": "This panel is already configured.",
@@ -84,13 +102,27 @@
         "description": "Warning: persistent mode keeps the panel's single remote session busy all the time, which locks out the HomeControl2 app. Use on-demand mode if you still need the app.",
         "data": {
           "mode": "Connection mode",
-          "scan_interval": "Poll interval"
+          "scan_interval": "Poll interval",
+          "arm_access": "Who can arm and disarm",
+          "pin": "PIN",
+          "users": "Users",
+          "allow_automations": "Allow automations and scripts",
+          "always_force_arm": "Always force arm"
         },
         "data_description": {
           "mode": "On-demand opens a short session for each poll and each command. Persistent keeps one session open and receives changes as they happen.",
-          "scan_interval": "Minutes between polls in on-demand mode (1 to 60)."
+          "scan_interval": "Minutes between polls in on-demand mode (1 to 60).",
+          "arm_access": "PIN: anyone who enters the PIN in Home Assistant. Users: only the users you choose below. Anyone: no check at all, so every Home Assistant user, automation and script can disarm the alarm.",
+          "pin": "4 to 8 digits. Leave empty to keep the current PIN. Home Assistant stores only a salted hash of it.",
+          "users": "In users mode, the Home Assistant users who may arm and disarm.",
+          "allow_automations": "In users mode, also allow automations and scripts, which act without a user. In PIN mode they must send the PIN as the code.",
+          "always_force_arm": "When on, the normal arm actions omit open inputs and arm anyway, as the HomeControl2 app does. When off, arming fails with the reason (for example an open door), and the Force arm action arms anyway."
         }
       }
+    },
+    "error": {
+      "invalid_pin": "Enter a PIN of 4 to 8 digits.",
+      "no_users": "Choose at least one user."
     }
   },
   "selector": {
@@ -98,6 +130,20 @@
       "options": {
         "on_demand": "On-demand (recommended)",
         "persistent": "Persistent (live updates, locks out the app)"
+      }
+    },
+    "arm_access": {
+      "options": {
+        "pin": "PIN (recommended)",
+        "users": "Selected Home Assistant users",
+        "anyone": "Anyone (no check)"
+      }
+    },
+    "force_arm_mode": {
+      "options": {
+        "away": "Away (level A)",
+        "night": "Night (level B)",
+        "custom_bypass": "Custom bypass (level C)"
       }
     }
   },
@@ -125,6 +171,18 @@
     },
     "mode_not_supported": {
       "message": "This arm mode is not available: its level is not in use, or the user code may not set it."
+    },
+    "invalid_code": {
+      "message": "The PIN is missing or wrong."
+    },
+    "user_not_allowed": {
+      "message": "Your Home Assistant user is not allowed to arm or disarm this panel."
+    },
+    "automation_not_allowed": {
+      "message": "Automations and scripts are not allowed to arm or disarm this panel. An admin can allow them in the integration's options."
+    },
+    "arm_refused": {
+      "message": "{area} cannot be armed: {reason}. Close it, or use the Force arm action to omit open inputs."
     }
   },
   "entity": {
@@ -141,6 +199,28 @@
       "faults": {
         "name": "Faults"
       }
+    }
+  },
+  "services": {
+    "force_arm": {
+      "name": "Force arm",
+      "description": "Arms even if inputs are open, omitting them until the next unset, as the HomeControl2 app does.",
+      "fields": {
+        "code": {
+          "name": "Code",
+          "description": "The PIN, if the integration asks for one."
+        },
+        "mode": {
+          "name": "Mode",
+          "description": "On a level-set panel, which level to set (default away). Ignored by area entities."
+        }
+      }
+    }
+  },
+  "issues": {
+    "arm_access_not_set": {
+      "title": "Choose who can arm and disarm {title}",
+      "description": "No access rule is set, so anyone who can use Home Assistant, and every automation and script, can arm and disarm {title}. Open the integration's options and choose a PIN, selected users, or anyone. This message goes away once you save the options."
     }
   }
 }

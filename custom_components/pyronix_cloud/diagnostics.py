@@ -18,6 +18,7 @@ from .const import (
     CONF_CLOUD_URL,
     CONF_DEVICE_ID,
     CONF_PANEL_ID,
+    CONF_PIN_HASH,
     CONF_USER_CODE,
 )
 
@@ -32,9 +33,10 @@ TO_REDACT_ENTRY: Final = {
     CONF_CLOUD_URL,
     CONF_DEVICE_ID,
     CONF_PANEL_ID,
+    CONF_PIN_HASH,
     CONF_USER_CODE,
 }
-"""Credentials and identifiers in the entry data and options."""
+"""Credentials, identifiers and the arm/disarm PIN hash in the entry."""
 
 TO_REDACT_SNAPSHOT: Final = {
     "panel_id",

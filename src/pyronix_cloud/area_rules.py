@@ -10,10 +10,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
-from pyronix_cloud.errors import NotPermittedError
+from pyronix_cloud.errors import NotPermittedError, SetRefusedError
 from pyronix_cloud.models import AreaStatus
 
 if TYPE_CHECKING:
+    from pyronix_cloud.models import Area
     from pyronix_cloud.panel_state import PanelSnapshot
 
 ARMED: Final = frozenset({AreaStatus.SETTING, AreaStatus.SET, AreaStatus.ALARMED})
@@ -21,6 +22,12 @@ ARMED: Final = frozenset({AreaStatus.SETTING, AreaStatus.SET, AreaStatus.ALARMED
 
 DISARMED: Final = frozenset({AreaStatus.UNSET})
 """Statuses that confirm an unset command."""
+
+NOT_READY: Final = frozenset({AreaStatus.CANNOT_SET, AreaStatus.CAN_OVERRIDE})
+"""Statuses in which a set without force is refused before it is sent."""
+
+REFUSED: Final = NOT_READY | {AreaStatus.SET_CANCELLED}
+"""Statuses that refuse a set without force once the panel reports them."""
 
 
 def all_in(
@@ -60,3 +67,55 @@ def check_permitted(
         verb = "set" if set_areas else "unset"
         msg = f"the user may not {verb} areas {denied}"
         raise NotPermittedError(msg)
+
+
+def check_settable(snapshot: PanelSnapshot, areas: tuple[int, ...]) -> None:
+    """Raise if an area is not ready to set without force.
+
+    Args:
+        snapshot: The panel state.
+        areas: Area numbers; unknown ones are left for the panel to judge.
+
+    Raises:
+        SetRefusedError: An area reports CannotSet or CanOverride.
+    """
+    for number in areas:
+        area = snapshot.areas.get(number)
+        if area is not None and area.status in NOT_READY:
+            raise SetRefusedError(area)
+
+
+def refused_area(
+    snapshot: PanelSnapshot, areas: tuple[int, ...], before: PanelSnapshot
+) -> Area | None:
+    """Return the first area that newly reports a refusal, or None.
+
+    A refusal status already shown in ``before`` (such as a cancelled set from
+    an earlier attempt) is not new, so it does not count.
+
+    Args:
+        snapshot: The panel state now.
+        areas: Area numbers of the set command.
+        before: The panel state when the command was sent.
+    """
+    for number in areas:
+        area = snapshot.areas.get(number)
+        if area is None or area.status not in REFUSED:
+            continue
+        old = before.areas.get(number)
+        if old is None or old.status is not area.status:
+            return area
+    return None
+
+
+def check_not_refused(
+    snapshot: PanelSnapshot, areas: tuple[int, ...], before: PanelSnapshot
+) -> None:
+    """Raise if an area newly reports a refusal (see :func:`refused_area`).
+
+    Raises:
+        SetRefusedError: The panel refused to set an area.
+    """
+    area = refused_area(snapshot, areas, before)
+    if area is not None:
+        raise SetRefusedError(area)

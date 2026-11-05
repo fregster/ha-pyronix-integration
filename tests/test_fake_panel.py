@@ -170,6 +170,17 @@ def test_unset_pushes_unset_and_skips_unknown_areas() -> None:
     assert panel.areas == {2: 0}
 
 
+def test_set_can_be_refused() -> None:
+    behaviour = PanelBehaviour(set_statuses=(5,), repeat=1)
+    panel, app = FakePanel(behaviour), App()
+    app.login(panel)
+    replies = panel.receive_frame(app.frame("D", commands.set_areas([0], force=False)))
+    (text,) = app.texts(replies)
+    assert _areas([text]) == [(0, AreaStatus.CAN_OVERRIDE)]
+    assert json.loads(text)["Detail"][0]["S"] == "Set Delayed"
+    assert panel.areas == {0: 5}
+
+
 def test_ignored_commands_are_recorded() -> None:
     panel, app = FakePanel(PanelBehaviour(confirm_commands=False)), App()
     app.login(panel)
