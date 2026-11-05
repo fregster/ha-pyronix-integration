@@ -177,6 +177,10 @@ Every message has the same envelope:
 
 - No XML escaping is applied. Values are inserted as-is.
 - If `AppUser`, `PushId` or `DeviceId` is empty, the function returns the string `"null"`.
+- *Implementation note (not protocol fact):* the library sends the app's own values for
+  `AppVersion` `6.03.001`, `AppType` `16`, `OSName` `Android`, `OSVersion` `14`,
+  `NetworkType` `Wifi` and `AppLang` `uk` by default. Callers can override them with
+  `pyronix_cloud.AppProfile` in case the cloud ever gates on app version.
 
 | CloudMsgType | Type-specific tags | Sent when | Base64? |
 |---|---|---|---|

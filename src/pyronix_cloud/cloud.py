@@ -12,7 +12,7 @@ forms seen live (``<e>u</e>``, ``<e>j </e>``).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field
 import enum
 import re
 from typing import Final
@@ -38,6 +38,14 @@ APP_LANG: Final = "uk"
 DEFAULT_PUSH_ID: Final = "ha-pyronix"
 
 _REQUIRED_FIELDS: Final = ("app_user", "panel_id", "device_id", "push_id")
+_OPTIONAL_FIELDS: Final = ("app_password", "system_name")
+_PROFILE_TEXT_FIELDS: Final = (
+    "app_version",
+    "os_name",
+    "os_version",
+    "network_type",
+    "app_lang",
+)
 _FORBIDDEN_CHARS: Final = frozenset("<>&")
 _REPLY_START: Final = "<e>"
 _REPLY_END: Final = "</e>"
@@ -65,6 +73,58 @@ class CloudRequest(enum.Enum):
     CONN_TO_PANEL = enum.auto()
 
 
+def _check_text(instance: object, names: tuple[str, ...], *, required: bool) -> None:
+    """Reject empty (when ``required``) or markup-bearing text fields.
+
+    Raises:
+        ValueError: The message names the field, never its value.
+    """
+    for name in names:
+        value = getattr(instance, name)
+        if required and not value:
+            msg = f"{name} must not be empty"
+            raise ValueError(msg)
+        if _FORBIDDEN_CHARS.intersection(value):
+            msg = f"{name} must not contain '<', '>' or '&'"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AppProfile:
+    """The app identity sent in every cloud request (PROTOCOL.md §3.3).
+
+    The defaults are the HomeControl2 Android app's values. Override them only
+    if the cloud starts to refuse these (for example, an app version gate).
+
+    Attributes:
+        app_version: ``<l>``, the app version.
+        app_type: ``<t>``, the app type code.
+        os_name: ``<m>``, the operating system name.
+        os_version: ``<v>``, the operating system version.
+        network_type: ``<c>``, the network type.
+        app_lang: ``<lang>``, the app language.
+
+    Raises:
+        ValueError: A text field is empty or contains ``<``, ``>`` or ``&``, or
+            ``app_type`` is negative. The message names the field, never its
+            value.
+    """
+
+    app_version: str = APP_VERSION
+    app_type: int = APP_TYPE
+    os_name: str = OS_NAME
+    os_version: str = OS_VERSION
+    network_type: str = NETWORK_TYPE
+    app_lang: str = APP_LANG
+
+    def __post_init__(self) -> None:
+        """Validate every field."""
+        if self.app_type < 0:
+            msg = "app_type must not be negative"
+            raise ValueError(msg)
+        _check_text(self, _PROFILE_TEXT_FIELDS, required=True)
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CloudIdentity:
     """The values that identify the app and the panel to the cloud relay.
@@ -81,17 +141,12 @@ class CloudIdentity:
     device_id: str
     push_id: str = DEFAULT_PUSH_ID
     system_name: str = "Home"
+    profile: AppProfile = field(default_factory=AppProfile)
 
     def __post_init__(self) -> None:
-        """Validate every field."""
-        for name in _REQUIRED_FIELDS:
-            if not getattr(self, name):
-                msg = f"{name} must not be empty"
-                raise ValueError(msg)
-        for item in fields(self):
-            if _FORBIDDEN_CHARS.intersection(getattr(self, item.name)):
-                msg = f"{item.name} must not contain '<', '>' or '&'"
-                raise ValueError(msg)
+        """Validate every text field (the profile validates itself)."""
+        _check_text(self, _REQUIRED_FIELDS, required=True)
+        _check_text(self, _OPTIONAL_FIELDS, required=False)
 
 
 def _type_tags(identity: CloudIdentity, kind: CloudRequest) -> str:
@@ -113,19 +168,20 @@ def build_request(identity: CloudIdentity, kind: CloudRequest) -> str:
     only through :func:`redact`, and never log the base64 form.
 
     Args:
-        identity: The app and panel identity.
+        identity: The app and panel identity, with its app profile.
         kind: Which request to build.
 
     Returns:
         ``"(" + base64 + ")"`` for the first three kinds, ``"(" + XML + ")"``
         for :attr:`CloudRequest.CONN_TO_PANEL`.
     """
+    app = identity.profile
     xml = (
         f"<p><n>{identity.app_user}</n><u>{identity.push_id}</u>"
         f"{_type_tags(identity, kind)}"
-        f"<i>{identity.device_id}</i><l>{APP_VERSION}</l><t>{APP_TYPE}</t>"
-        f"<m>{OS_NAME}</m><v>{OS_VERSION}</v><c>{NETWORK_TYPE}</c>"
-        f"<lang>{APP_LANG}</lang></p>"
+        f"<i>{identity.device_id}</i><l>{app.app_version}</l><t>{app.app_type}</t>"
+        f"<m>{app.os_name}</m><v>{app.os_version}</v><c>{app.network_type}</c>"
+        f"<lang>{app.app_lang}</lang></p>"
     )
     if kind is CloudRequest.CONN_TO_PANEL:
         return f"({xml})"

@@ -5,12 +5,15 @@
 from __future__ import annotations
 
 import base64
+from dataclasses import replace
+from typing import Any
 
 from hypothesis import given
 from hypothesis import strategies as st
 import pytest
 
 from pyronix_cloud.cloud import (
+    AppProfile,
     CloudIdentity,
     CloudReply,
     CloudRequest,
@@ -33,7 +36,7 @@ PASSWORD = "s3cret-PW"  # noqa: S105 - fake test value, not a real credential
 
 
 def identity(**overrides: str) -> CloudIdentity:
-    values = {
+    values: dict[str, Any] = {
         "app_user": "user@example.com",
         "panel_id": "12345678",
         "app_password": PASSWORD,
@@ -98,6 +101,76 @@ def test_build_request_uses_push_id_and_system_name() -> None:
     )
     assert "<u>push</u>" in wire
     assert "<b>Villa</b>" in wire
+
+
+CUSTOM = AppProfile(
+    app_version="7.00.002",
+    app_type=17,
+    os_name="iOS",
+    os_version="18.1",
+    network_type="Mobile",
+    app_lang="de",
+)
+
+
+def plain_xml(identity_: CloudIdentity, kind: CloudRequest) -> str:
+    wire = build_request(identity_, kind)[1:-1]
+    if kind is CloudRequest.CONN_TO_PANEL:
+        return wire
+    return base64.b64decode(wire.replace("\n", "")).decode()
+
+
+def test_default_profile_is_the_app() -> None:
+    assert identity().profile == AppProfile()
+    assert AppProfile() == AppProfile(
+        app_version="6.03.001",
+        app_type=16,
+        os_name="Android",
+        os_version="14",
+        network_type="Wifi",
+        app_lang="uk",
+    )
+
+
+@pytest.mark.parametrize("kind", list(CloudRequest))
+def test_build_request_uses_the_profile(kind: CloudRequest) -> None:
+    xml = plain_xml(replace(identity(), profile=CUSTOM), kind)
+    assert xml.endswith(
+        "<i>dev-0001</i><l>7.00.002</l><t>17</t><m>iOS</m><v>18.1</v>"
+        "<c>Mobile</c><lang>de</lang></p>"
+    )
+    assert "6.03.001" not in xml
+    assert "Android" not in xml
+
+
+PROFILE_TEXT = ["app_version", "os_name", "os_version", "network_type", "app_lang"]
+SENTINEL = "6.0-sentinel"
+
+
+def profile_with(name: str, value: str) -> AppProfile:
+    fields: dict[str, Any] = {name: value}
+    return AppProfile(**fields)
+
+
+@pytest.mark.parametrize("name", PROFILE_TEXT)
+def test_profile_rejects_empty_field(name: str) -> None:
+    with pytest.raises(ValueError, match=f"{name} must not be empty"):
+        profile_with(name, "")
+
+
+@pytest.mark.parametrize("name", PROFILE_TEXT)
+@pytest.mark.parametrize("char", ["<", ">", "&"])
+def test_profile_rejects_markup_without_echoing(name: str, char: str) -> None:
+    value = f"{SENTINEL}{char}x"
+    with pytest.raises(ValueError, match=name) as info:
+        profile_with(name, value)
+    assert SENTINEL not in str(info.value)
+
+
+def test_profile_rejects_negative_app_type() -> None:
+    with pytest.raises(ValueError, match="app_type must not be negative"):
+        AppProfile(app_type=-1)
+    assert AppProfile(app_type=0).app_type == 0
 
 
 def test_identity_repr_hides_password() -> None:
