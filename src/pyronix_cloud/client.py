@@ -170,6 +170,7 @@ class PyronixClient:
     async def arm(self, areas: Iterable[int], *, force: bool = True) -> PanelSnapshot:
         """Set areas and wait until each is setting, set or in alarm.
 
+        Nothing is sent if every area is already setting, set or in alarm.
         Without ``force`` an area that is not ready is refused before anything
         is sent. A refusal the panel reports afterwards ends the wait at once:
         CannotSet or SetCancelled, and without ``force`` also CanOverride.

@@ -49,12 +49,15 @@ async def arm_areas(
 ) -> PanelSnapshot:
     """Set ``numbers`` and wait until each is setting, set or in alarm.
 
-    See :meth:`pyronix_cloud.client.PyronixClient.arm` for the behaviour and
-    the errors raised.
+    Nothing is sent if every area is already setting, set or in alarm. See
+    :meth:`pyronix_cloud.client.PyronixClient.arm` for the behaviour and the
+    errors raised.
     """
     payload = commands.set_areas(numbers, force=force)
     before = feed.snapshot
     check_permitted(before, numbers, set_areas=True)
+    if all_in(before, numbers, ARMED):
+        return before
     if not force:
         check_settable(before, numbers)
     snapshot = await _send_and_wait(

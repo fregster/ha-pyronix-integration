@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Paul Fryer
 # SPDX-License-Identifier: LGPL-3.0-or-later
-"""Set/unset commands: unknown outcomes and forced-set refusals."""
+"""Set/unset commands: unknown outcomes, forced-set refusals and already-set areas."""
 
 from __future__ import annotations
 
@@ -201,4 +201,23 @@ async def test_a_forced_set_ignores_a_stale_cancelled_set() -> None:
     _, client = await open_client(areas={0: 6})
     snapshot = await client.arm([0], force=True)
     assert snapshot.areas[0].status in {AreaStatus.SETTING, AreaStatus.SET}
+    await client.close()
+
+
+# --- areas that are already set ---------------------------------------------
+
+
+@pytest.mark.parametrize("force", [True, False])
+async def test_arm_of_set_areas_sends_nothing(*, force: bool) -> None:
+    fake, client = await open_client(areas={0: 1, 1: 3})
+    snapshot = await client.arm([0, 1], force=force)
+    assert snapshot is client.snapshot
+    assert received(fake) == []
+    await client.close()
+
+
+async def test_arm_sends_when_one_area_is_unset() -> None:
+    fake, client = await open_client(areas={0: 1})
+    await client.arm([0, 1])
+    assert received(fake) == [commands.set_areas([0, 1])]
     await client.close()
