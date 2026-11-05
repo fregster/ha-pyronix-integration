@@ -16,9 +16,12 @@ from custom_components.pyronix_cloud.const import (
     CONF_APP_USER,
     CONF_CLOUD_URL,
     CONF_DEVICE_ID,
+    CONF_LIVE_UPDATES,
+    CONF_MODE,
     CONF_PANEL_ID,
     CONF_USER_CODE,
     DOMAIN,
+    MODE_PERSISTENT,
 )
 from pyronix_cloud import LIVE_URL, CommunicationError
 from pyronix_cloud.testing import dump
@@ -72,6 +75,7 @@ async def test_user_creates_entry(hass: HomeAssistant, cloud: FakeCloud) -> None
         CONF_PANEL_ID,
         CONF_APP_PASSWORD,
         CONF_USER_CODE,
+        CONF_LIVE_UPDATES,
         CONF_ADVANCED,
     ]
     result = await submit(hass, form, USER_INPUT)
@@ -81,6 +85,8 @@ async def test_user_creates_entry(hass: HomeAssistant, cloud: FakeCloud) -> None
     assert data[CONF_PANEL_ID] == dump.PANEL_ID
     assert CONF_CLOUD_URL not in data  # the default relay is not stored
     assert CONF_ADVANCED not in data
+    assert CONF_LIVE_UPDATES not in data
+    assert result["options"] == {}  # on-demand by default
     assert cloud.sessions[0].url == LIVE_URL
     assert len(data[CONF_DEVICE_ID]) == 16
     int(data[CONF_DEVICE_ID], 16)
@@ -93,6 +99,16 @@ async def test_user_creates_entry(hass: HomeAssistant, cloud: FakeCloud) -> None
     assert said_goodbye(session)
     assert session.panel is not None
     assert session.panel.received_commands == []
+
+
+async def test_live_updates_starts_persistent(hass: HomeAssistant) -> None:
+    result = await submit(
+        hass, await start(hass), {**USER_INPUT, CONF_LIVE_UPDATES: True}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["options"] == {CONF_MODE: MODE_PERSISTENT}
+    assert CONF_LIVE_UPDATES not in result["data"]
+    await hass.config_entries.async_unload(result["result"].entry_id)
 
 
 async def test_device_id_is_kept_across_retries(
