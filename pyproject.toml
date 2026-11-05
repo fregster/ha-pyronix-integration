@@ -35,6 +35,7 @@ dev = [
     { include-group = "test" },
     { include-group = "probe" },
     { include-group = "ha" },
+    { include-group = "mutation" },
     "pre-commit>=4",
 ]
 lint = [
@@ -48,6 +49,8 @@ test = [
     "pytest-asyncio>=1.0",
     "pytest-cov>=6",
     "hypothesis>=6.130",
+    "pytest-randomly>=3.16",
+    "pytest-timeout>=2.3",
 ]
 # Home Assistant test harness for custom_components/. HA dropped Python 3.13 in
 # 2026.3, so 3.13 tests run against HA 2026.2.3 (the last release that supports it)
@@ -55,6 +58,10 @@ test = [
 ha = [
     "pytest-homeassistant-custom-component==0.13.316; python_full_version >= '3.13.2' and python_version < '3.14'",
     "pytest-homeassistant-custom-component==0.13.375; python_full_version >= '3.14.2'",
+]
+# Mutation testing of the pure protocol modules ([tool.mutmut] below).
+mutation = [
+    "mutmut==3.8.1",
 ]
 # Dependencies of the stand-alone research probe (probe/), not of the library.
 probe = [
@@ -184,8 +191,39 @@ filterwarnings = [
     # own thread-local Random, which the refcount heuristic misjudges once the HA test
     # plugin is loaded). Not caused by our code; remove when Hypothesis fixes it.
     "ignore:It looks like `register_random` was passed an object:hypothesis.errors.HypothesisWarning",
+    # Only under PYTHONDEVMODE (aiohttp DEBUG): HA's shared client session replaces
+    # ClientSession.close to stop integrations closing it. HA's code, not ours.
+    "ignore:Setting custom ClientSession.close attribute is discouraged:DeprecationWarning:homeassistant.helpers.aiohttp_client",
 ]
 xfail_strict = true
+# A hang in async connection code must fail fast instead of stalling CI. The slowest
+# test takes about 3 s on the Python 3.13 leg, so 30 s leaves ample headroom for slow
+# runners. Long runs (the nightly Hypothesis profile, mutmut) pass --timeout=0.
+timeout = 30
+
+# --------------------------------------------------------------------------- mutmut
+# Mutation testing (weekly in nightly.yml, or `uv run mutmut run`). Only the pure
+# protocol modules are mutated, each against its own test module. Coverage, the
+# shuffle and the per-test timeout are off: mutmut times each mutant itself.
+[tool.mutmut]
+source_paths = ["src/"]
+only_mutate = [
+    "src/pyronix_cloud/frames.py",
+    "src/pyronix_cloud/crypto.py",
+    "src/pyronix_cloud/link_codec.py",
+    "src/pyronix_cloud/area_rules.py",
+    "src/pyronix_cloud/commands.py",
+    "src/pyronix_cloud/transport.py",
+]
+pytest_add_cli_args_test_selection = [
+    "tests/test_frames.py",
+    "tests/test_crypto.py",
+    "tests/test_link_codec.py",
+    "tests/test_area_rules.py",
+    "tests/test_commands.py",
+    "tests/test_transport.py",
+]
+pytest_add_cli_args = ["--no-cov", "-p", "no:randomly", "--timeout=0"]
 
 [tool.coverage.run]
 branch = true
@@ -203,7 +241,7 @@ exclude_also = [
 
 # --------------------------------------------------------------------------- codespell
 [tool.codespell]
-skip = "./decompiled,./apk,./.venv,./LICENSES,uv.lock,*.log"
+skip = "./decompiled,./apk,./.venv,./mutants,./LICENSES,uv.lock,*.log"
 ignore-words-list = "omitt,ser,inout,hass"
 
 # --------------------------------------------------------------------------- module size
