@@ -5,9 +5,11 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 
 from hypothesis import HealthCheck, settings
+from hypothesis.database import DirectoryBasedExampleDatabase
 import pytest
 
 # Crypto-heavy properties are slow on shared CI runners; keep them deterministic and
@@ -21,7 +23,18 @@ settings.register_profile(
     max_examples=200,
     suppress_health_check=[HealthCheck.too_slow],
 )
-settings.load_profile("default")
+# Scheduled deep run (.github/workflows/nightly.yml): fresh random examples each night,
+# many more of them, and a database so a failure can be replayed from the artifact.
+settings.register_profile(
+    "nightly",
+    deadline=None,
+    derandomize=False,
+    max_examples=5000,
+    database=DirectoryBasedExampleDatabase(".hypothesis/examples"),
+    print_blob=True,
+    suppress_health_check=[HealthCheck.too_slow],
+)
+settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "default"))
 
 
 _SYNC_LOOP = pytest.StashKey[asyncio.AbstractEventLoop]()
