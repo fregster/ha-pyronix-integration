@@ -12,12 +12,14 @@ from pyronix_cloud.cloud import CloudIdentity
 from pyronix_cloud.connection import Connection, open_socket
 from pyronix_cloud.errors import (
     ConnectionClosedError,
+    ConnectionSilentError,
     NotConnectedError,
     ProtocolError,
     PyronixError,
     PyronixTimeoutError,
 )
 from pyronix_cloud.session import DocumentReceived, ProtocolSession
+from pyronix_cloud.settings import Timeouts
 from pyronix_cloud.testing import dump
 from pyronix_cloud.testing.fake_cloud import FakeCloud
 from pyronix_cloud.testing.memory_socket import MemoryWebSocket
@@ -76,18 +78,23 @@ class Faulty(WebSocket):
 
 
 class Harness:
-    def __init__(self, fake: FakeCloud, socket: Faulty, close_timeout: float) -> None:
+    def __init__(self, fake: FakeCloud, socket: Faulty, timeouts: Timeouts) -> None:
         self.fake = fake
         self.socket = socket
         self.events: list[SessionEvent] = []
         self.ends: list[PyronixError | None] = []
+        self.ended = asyncio.Event()
         self.connection = Connection(
             socket,
             ProtocolSession(IDENTITY, "1234"),
             on_event=self.events.append,
-            on_end=self.ends.append,
-            close_timeout=close_timeout,
+            on_end=self._on_end,
+            timeouts=timeouts,
         )
+
+    def _on_end(self, error: PyronixError | None) -> None:
+        self.ends.append(error)
+        self.ended.set()
 
     @property
     def panel(self) -> FakePanel:
@@ -107,12 +114,19 @@ async def until(predicate: Callable[[], bool]) -> None:
     pytest.fail("condition not reached")
 
 
+async def ended(harness: Harness) -> PyronixError | None:
+    """Wait in real time (bounded) for the session to end; return its error."""
+    async with asyncio.timeout(1):
+        await harness.ended.wait()
+    return harness.ends[0]
+
+
 @pytest.fixture
 async def harness(request: pytest.FixtureRequest) -> AsyncIterator[Harness]:
-    close_timeout = getattr(request, "param", 1.0)
+    timeouts = getattr(request, "param", Timeouts(close=1))
     async with FakeCloud() as fake:
         socket = Faulty(await fake.connector()("memory://"))
-        h = Harness(fake, socket, close_timeout)
+        h = Harness(fake, socket, timeouts)
         await h.connection.start()
         await until(lambda: h.documents() == len(dump.login_dump()))
         yield h
@@ -171,7 +185,7 @@ async def test_socket_close_failure_is_logged(
     assert "Closing the WebSocket failed: OSError" in caplog.text
 
 
-@pytest.mark.parametrize("harness", [0.02], indirect=True)
+@pytest.mark.parametrize("harness", [Timeouts(close=0.02)], indirect=True)
 async def test_close_is_bounded(
     harness: Harness, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -216,3 +230,22 @@ async def test_server_drop_ends_the_session(harness: Harness) -> None:
     await until(lambda: bool(harness.ends))
     assert isinstance(harness.ends[0], ConnectionClosedError)
     assert not harness.fake.sessions[0].closed_by_client
+
+
+@pytest.mark.parametrize("harness", [Timeouts(close=1, silence=0.05)], indirect=True)
+async def test_silence_ends_the_session(harness: Harness) -> None:
+    error = await ended(harness)
+    assert isinstance(error, ConnectionSilentError)
+    assert isinstance(error, ConnectionClosedError)
+    assert "no message" in str(error)
+    assert harness.panel.goodbye_received
+    assert harness.fake.sessions[0].closed_by_client
+
+
+@pytest.mark.parametrize("harness", [Timeouts(close=1, silence=0.1)], indirect=True)
+async def test_cloud_heartbeats_keep_the_session_alive(harness: Harness) -> None:
+    for _ in range(12):  # 0.24 s in all, more than twice the silence window
+        await asyncio.sleep(0.02)
+        await harness.fake.heartbeat()
+    assert harness.ends == []
+    assert isinstance(await ended(harness), ConnectionSilentError)

@@ -112,6 +112,14 @@ class ConnectionClosedError(PyronixError):
     """The WebSocket or the panel session closed unexpectedly."""
 
 
+class ConnectionSilentError(ConnectionClosedError):
+    """Nothing arrived from the cloud relay for too long; the socket is presumed dead.
+
+    A half-open socket raises no error of its own, so the client gives up after
+    ``Timeouts.silence`` seconds without any inbound message.
+    """
+
+
 class CommunicationError(PyronixError):
     """The cloud relay could not be reached (DNS, TCP, TLS or HTTP upgrade)."""
 
