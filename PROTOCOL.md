@@ -22,6 +22,9 @@ All source paths below are relative to `decompiled/sources/` (gitignored; regene
 - **Observed** — read directly in decompiled code.
 - **Inferred** — a reasoned conclusion from code, not directly stated.
 - **Unknown** — not determined; needs a traffic capture or further reading.
+- **Reported (third-party)** — stated by an independent implementation (README or code) and
+  **not** observed by us. Treat it as a strong hint, not as fact, until our own capture confirms
+  it. Sources are listed in [§13.1](#131-third-party-sources).
 
 ---
 
@@ -40,6 +43,7 @@ All source paths below are relative to `decompiled/sources/` (gitignored; regene
 11. [Reference implementation notes (Python)](#11-reference-implementation-notes-python)
 12. [Security observations](#12-security-observations)
 13. [Open questions](#13-open-questions)
+    - [13.1 Third-party sources](#131-third-party-sources)
 14. [Emulator and acquisition notes](#14-emulator-and-acquisition-notes)
 15. [Source index](#15-source-index)
 
@@ -227,6 +231,12 @@ Every message has the same envelope:
 | `n` | Panel not polling (offline) | `ERROR_PANEL_NOT_POLLING` → fail |
 | other | — | `ERROR_UNKNOWN_DATA` → fail |
 
+- **Reported (third-party, recorded 2026-11-05):** right after a goodbye and disconnect, the cloud
+  has sometimes answered a new connection with `n` (not polling), then accepted one about 35 s
+  later (HA-Pyronix README, troubleshooting). So `n` straight after our own session may mean "slot
+  not yet released", not "panel offline". Do not retry in a tight loop; back off for ≥35 s. See
+  also §13 Q11.
+
 - **Re-send (observed, `HomeControl.java:735-757`):** after the switch, if the state is still
   `STG_REQ_PWD` or `STG_REQ_CLOUD`, the app re-sends `MSG_REQ_PWD` or `MSG_CONN_TO_CLOUD`. This
   applies to any message that leaves the state unchanged, `o` included.
@@ -396,6 +406,11 @@ Further Java details that a port must copy (found while porting, 2026-11-04):
   `0`–`9`.
 - In the short branch, `getBytes(UTF_8)` turns a lone surrogate into `?`.
 
+**Divergence (recorded 2026-11-05):** the third-party port aiopyronix 0.1.1 (§13.1) does a true
+hex decode in the long branch (`bytes.fromhex(password[:32])`, rejecting non-hex characters). That
+contradicts the radix-10 behaviour above. This document follows the decompiled source. Neither
+reading has been tested against a panel with a 32+ character app password.
+
 ### 4.6 Uplink / modem type from the announce (`p[1]`)
 
 | If `p[1] & 0x80` | value | Type | | Else (bit flags) | Type |
@@ -460,6 +475,10 @@ These are sent as the plaintext payload of `D` frames (`HomeControl.java:954-111
 | Request log | `0x35` (53) `SPI_REQUEST_LOG_EVENTS` | `[0x35, count (1-255)]` | App requests 10 |
 | Take photo (PIR cam) | — (`G` frame) | `[0x00, zoneLo, zoneHi]` | `SdkManagerImpl.java:963-972` |
 
+- **Reported (third-party, recorded 2026-11-05):** the **non-forced** single-area forms work on
+  hardware: set `[0x2D, 0x01, area]` (count 1, no `0x80` force flag) and unset
+  `[0x2F, 0x01, area]` (aiopyronix `control_frame`; HA-Pyronix README, §13.1). That client also
+  refuses to send a set while the area reports `V` 4 or 5. Not yet tried by us.
 - Area numbers are `OcpArea.id`, the area's `R` value from panel JSON (§6.3), as one byte.
 - Input and output numbers are one byte (`(byte)`), so input IDs above 255 would be truncated.
   **Unknown** whether the panel supports more than 255.
@@ -567,7 +586,14 @@ opened, the panel pushed area A with `V:5` (CanOverride), `S:"Set Delayed"` and
 `Faults.List:[{"I":"Landing DT Open"}]`. When it closed, the panel pushed `V:0` (Unset). So `V:5`
 means "not ready: setting would need an override", not "arming". Each change is re-sent about once
 a second for 2–3 copies, so deduplicate. Unused areas report `V:4` (CannotSet). A real
-set/exit-delay/set sequence has **not** been captured yet.
+set/exit-delay/set sequence has **not** been captured by us yet.
+
+**Reported (third-party, recorded 2026-11-05):** after a set command, the area is pushed over the
+open session as `V:3` (Setting) for the exit delay, about 30–40 s on their panel, then `V:1`
+(Set) (HA-Pyronix README, §13.1). Their client treats `V` 1 or 3 as acceptance of a set, `V` 0 as
+acceptance of an unset, and `V` 4, 5 or 6 after a set as failure (aiopyronix
+`operation_confirmed`, `_settle_pending`). This fits the `OcpAreaStatus` order above. The exit
+mode on their panel is not stated, so Final Door behaviour is still open (§13 Q12).
 
 **Suggested Home Assistant `alarm_control_panel` mapping (design choice, not observed):**
 
@@ -639,6 +665,8 @@ entries into `completeInputArray` across messages when `isnew == 1`
 
 This shows which areas the logged-in user code may set or unset. **Observed (live):** it also
 carries `"Flexiset":1` (meaning **unknown**), and its area numbers are the 0-based `R` values.
+**Reported (third-party, 2026-11-05):** aiopyronix uses `SetAreas.R` / `UnsetAreas.R` the same
+way, to limit which areas may be set or unset.
 
 ### 6.8 `fault` — panel faults (`OcpFaultsModel.java`, `FaultDetailModel.java`)
 
@@ -718,6 +746,9 @@ an explicit "get status" request, apart from the log request.
 | 18 | PANEL_DELETED_SUCCESS |
 | 19 | PANEL_ADDED_SUCCESS |
 | 21 | PANEL_JSON_ADDED_SUCCESS |
+
+**Reported (third-party, 2026-11-05):** `ERROR_PANEL_NOT_POLLING` (cloud `n`) can be transient
+straight after a goodbye; a new connection was accepted about 35 s later (§3.4).
 
 **`Errors`** (library return values):
 
@@ -875,12 +906,15 @@ b_payload = b"\x01" + pub
     drop, with back-off. Answer the cloud's `" "` heartbeat with opcode `0x20`. Locks out the app
     while connected (exact behaviour on contention: §13 Q11).
   Always end with the `E` goodbye frame; the slot frees as soon as the WebSocket closes.
+  **Reported (third-party):** the cloud may still answer `n` for up to ~35 s after a goodbye
+  (§3.4), so an on-demand poll or command shortly after the previous session can fail.
 - **Entities:**
   - `alarm_control_panel`: one per panel on level-set systems, one per area on area systems (§6.3).
   - `binary_sensor` per input (`V == Open`), with an `omitted` attribute.
   - `switch` per output (opcode `0x31`).
   - A sensor for faults; the history log on demand.
 - **Arming** uses `SPI_SET_AREAS` with force-omit (the app default). Make force-omit an option.
+  The non-forced form is reported to work (§5).
 
 ---
 
@@ -916,13 +950,28 @@ b_payload = b"\x01" + pub
 | 8 | ~~What selects `JSON_ORIG` vs `JSON_NG_V1`~~ **Partly answered:** the first announce extra byte (§4.4). Still open: what differs between the versions | Probe prints it; capture |
 | 9 | REST API base URL | Resolve `AppBuild.f().d()` |
 | 10 | Is a separate cloud "subscription" (`i` = expired) needed for app access? | Pyronix account terms |
-| 11 | **Session exclusivity.** Observed: while the probe was connected (as a separate panel user), the phone app could not log in; it got in at once after the probe disconnected. A probe started while the app was logged in connected fine. **Unknown:** whether that dropped the app (newest wins) or the app had released the slot | Watch the app during a probe run |
-| 12 | What a real set looks like: `V` sequence through exit delay to Set, and with Final Door exit mode | Capture while setting from the app |
-| 13 | What the panel does when the login `D` frame was encrypted with a wrong app password (key mismatch): `c` NACKs, `e`, or silence? The library maps both "no `d` frame ever verifies" and "our login is NACKed to the limit" to an authentication error | Capture with a deliberately wrong app password (costs a failed login; ask first) |
+| 11 | **Session exclusivity.** Observed: while the probe was connected (as a separate panel user), the phone app could not log in; it got in at once after the probe disconnected. A probe started while the app was logged in connected fine. **Unknown:** whether that dropped the app (newest wins) or the app had released the slot. **Reported (third-party, 2026-11-05):** straight after a goodbye the cloud sometimes answers `n` and accepts a new connection ~35 s later (§3.4), so the slot may not free at once | Watch the app during a probe run |
+| 12 | What a real set looks like: `V` sequence through exit delay to Set, and with Final Door exit mode. **Partly answered (third-party, 2026-11-05):** `V:3` (Setting) for ~30–40 s, then `V:1` (Set), pushed over the open session (§6.3). Still needs our own capture, including Final Door exit mode | Capture while setting from the app |
+| 13 | What the panel does when the login `D` frame was encrypted with a wrong app password (key mismatch): `c` NACKs, `e`, or silence? The library maps both "no `d` frame ever verifies" and "our login is NACKed to the limit" to an authentication error. **Reported (third-party, 2026-11-05):** aiopyronix treats an integrity failure on a data frame, or any `e`/`f`/`c` frame, before the first area data as an authentication failure (`_handle_panel_data`). That corroborates our inferred mapping, but it is a heuristic, not a captured trace | Capture with a deliberately wrong app password (costs a failed login; ask first) |
 
 The cheapest way to answer most of these is to run the real app on a physical Android phone with a
 debug build of `kotlinlibhomecontrol` logging. Alternatively, read `logcat`: the library prints
 every WebSocket message and plaintext buffer with `System.out.println`.
+
+### 13.1 Third-party sources
+
+Evidence labelled **Reported (third-party)** comes from an independent implementation. We read its
+code and README (2026-11-05) but did not run it, and none of it was observed by us.
+
+| Source | Licence | Notes |
+|---|---|---|
+| aiopyronix 0.1.1 — <https://github.com/Herbertmt978/aiopyronix> | MIT | Async client library. Relevant code: `src/aiopyronix/client.py`, `protocol.py` |
+| HA-Pyronix 0.4.1 — <https://github.com/Herbertmt978/HA-Pyronix> | MIT | Home Assistant integration on top of aiopyronix |
+
+The HA-Pyronix README states that connect, live area states, set, unset, reconnect and disconnect
+were verified on a real panel with HomeControl 2.0 app 6.3.0 and panel firmware 2.11 (from
+`panel.VersionHi`/`VersionLo`; the panel model is not stated), last checked on 2 November 2026.
+That firmware differs from our Euro 46 V10.26.
 
 ---
 
