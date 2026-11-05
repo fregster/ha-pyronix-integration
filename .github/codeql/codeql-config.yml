@@ -1,0 +1,10 @@
+# CodeQL configuration, used by .github/workflows/codeql.yml.
+name: pyronix-cloud CodeQL config
+
+# These directories are gitignored (decompiled vendor code, the vendor APK and third-party
+# downloads), so they never reach a CI checkout. Excluding them as well keeps a local or
+# accidental run from scanning or reporting on code that is not ours. probe/ stays in.
+paths-ignore:
+  - apk
+  - decompiled
+  - reference
