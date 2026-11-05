@@ -48,6 +48,7 @@ test = [
     "pytest-asyncio>=1.0",
     "pytest-cov>=6",
     "hypothesis>=6.130",
+    "pytest-randomly>=3.16",
     "pytest-timeout>=2.3",
 ]
 # Home Assistant test harness for custom_components/. HA dropped Python 3.13 in

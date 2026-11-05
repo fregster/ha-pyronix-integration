@@ -11,7 +11,9 @@ from hypothesis import HealthCheck, settings
 import pytest
 
 # Crypto-heavy properties are slow on shared CI runners; keep them deterministic and
-# free of wall-clock deadlines.
+# free of wall-clock deadlines. pytest-randomly shuffles test order and reseeds the
+# global `random`, but derandomize=True derives each test's seed from the test itself,
+# so the generated examples stay identical whatever --randomly-seed is.
 settings.register_profile(
     "default",
     deadline=None,
