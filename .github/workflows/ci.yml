@@ -50,9 +50,19 @@ jobs:
       - name: Scan full history with gitleaks
         env:
           GITLEAKS_VERSION: "8.30.0"
+        # Verify the tarball against the release's checksums file before unpacking it.
         run: |
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
-          ./gitleaks git --redact --no-banner --exit-code 1 .
+          set -euo pipefail
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          sums="gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          dir="$(mktemp -d)"
+          curl -sSfL -o "${dir}/${tarball}" "${base}/${tarball}"
+          curl -sSfL -o "${dir}/${sums}" "${base}/${sums}"
+          grep -F "  ${tarball}" "${dir}/${sums}" > "${dir}/expected.txt"
+          (cd "${dir}" && sha256sum --check --strict expected.txt)
+          tar -xzf "${dir}/${tarball}" -C "${dir}" gitleaks
+          "${dir}/gitleaks" git --redact --no-banner --exit-code 1 .
 
   test:
     name: Tests (Python ${{ matrix.python }})
