@@ -67,6 +67,19 @@ All source paths below are relative to `decompiled/sources/` (gitignored; regene
 - **Inferred:** a local-only (LAN) integration is not possible using this protocol, because the
   panel is reached through the cloud. A local integration would need the panel's own LAN or serial
   interface, which this app does not use.
+- **Observed (live, 2026-11-05):** a full TCP connect scan of a Euro 46 V10.26 with a DIGI-LAN
+  module found no listening ports. Every port refused the connection, so the module makes
+  outbound connections only. Caveat: the scan crossed a router, which could have refused
+  connections on the panel's behalf.
+- **Observed (vendor documentation and software):** on the Euro 46 V10, the DIGI-LAN module's
+  documented IP connections are the Pyronix Cloud (app and installer software) and alarm
+  reporting to a monitoring centre. The DIGI-LAN leaflet lists the firewall ports these need:
+  TCP 25000 ("panel"), 25010 ("Insite UDL") and 443 ("App"). **Inferred:** they are the panel's
+  outbound connections to the cloud. This is the panel's side of the relay that §3 describes from
+  the app's side. Which host and port carries the panel end of an app session is **Unknown**.
+  Neither connection offers a local endpoint. The only direct, cloud-free
+  link is the panel's RS-232 port, which carries the older installer protocol described in
+  [LEGACY_PROTOCOL.md](LEGACY_PROTOCOL.md), not this one.
 
 ---
 
