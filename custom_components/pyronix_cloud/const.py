@@ -26,6 +26,8 @@ CONF_CLOUD_URL: Final = "cloud_url"
 """Cloud relay URL; stored only when it is not the live relay."""
 CONF_ADVANCED: Final = "advanced"
 """The user step's collapsed section that holds the relay URL (never stored)."""
+CONF_LIVE_UPDATES: Final = "live_updates"
+"""User step tick box that starts the entry in persistent mode (never stored)."""
 
 DEFAULT_APP_USER: Final = "Home Assistant"
 PANEL_ID_LENGTH: Final = 8
