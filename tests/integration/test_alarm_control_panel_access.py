@@ -87,7 +87,9 @@ async def test_pin_mode(hass: HomeAssistant, cloud: FakeCloud) -> None:
     assert state.attributes["code_arm_required"] is True
     missing = await refusal(hass, "alarm_arm_away")
     assert isinstance(missing, ServiceValidationError)
-    wrong = await refusal(hass, "alarm_arm_away", data={ATTR_CODE: "1234"})
+    # Not the panel's keypad code: HA core logs service data at DEBUG, and the
+    # leak guard fails any test that puts the keypad code in a log.
+    wrong = await refusal(hass, "alarm_arm_away", data={ATTR_CODE: "9876"})
     assert wrong.translation_key == "invalid_code"
     forced = await refusal(hass, "force_arm", data={ATTR_CODE: "0000"})
     assert forced.translation_key == "invalid_code"

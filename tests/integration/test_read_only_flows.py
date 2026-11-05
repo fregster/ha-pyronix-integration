@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from homeassistant.config_entries import SOURCE_USER, ConfigEntryState
 from homeassistant.const import ATTR_ENTITY_ID, EVENT_HOMEASSISTANT_STOP
@@ -20,6 +20,7 @@ from custom_components.pyronix_cloud.const import (
     DOMAIN,
     MODE_ON_DEMAND,
     MODE_PERSISTENT,
+    SERVICE_FORCE_ARM,
 )
 from pyronix_cloud import commands
 from pyronix_cloud.testing import dump
@@ -27,7 +28,7 @@ from pyronix_cloud.testing.command_audit import state_changes, state_commands
 from pyronix_cloud.testing.fake_cloud import CloudBehaviour, FakeCloud
 from tests.integration.conftest import ENTRY_DATA, PERSISTENT, until
 from tests.integration.test_alarm_control_panel import entity_id
-from tests.integration.test_config_flow import USER_INPUT
+from tests.integration.test_config_flow import ANYONE, USER_INPUT
 from tests.integration.test_coordinator import poll
 from tests.integration.test_live import after_backoff
 
@@ -108,9 +109,9 @@ async def user_flow(
         flow["flow_id"], {**USER_INPUT, **WRONG_PASSWORD}
     )
     assert failed["errors"] == {"base": "invalid_auth"}
-    created = await hass.config_entries.flow.async_configure(
-        flow["flow_id"], USER_INPUT
-    )
+    access = await hass.config_entries.flow.async_configure(flow["flow_id"], USER_INPUT)
+    assert access["step_id"] == "access"
+    created = await hass.config_entries.flow.async_configure(access["flow_id"], ANYONE)
     assert created["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()  # the new entry's first refresh
 
@@ -173,35 +174,42 @@ async def test_flow_sends_only_read_only_commands(
     assert state_changes(cloud.panels) == []
 
 
+class ServiceCase(NamedTuple):
+    """One action call and the single command it must send."""
+
+    domain: str
+    service: str
+    data: dict[str, str]
+    expected: bytes
+
+
 # The fake panel uses level setting: the "alarm" entity's away level is area 0.
+# Normal arm does not force (open inputs refuse); only force_arm omits them.
+ARM_AWAY = ServiceCase(
+    "alarm_control_panel", "alarm_arm_away", {}, commands.set_areas([0], force=False)
+)
+FORCE_ARM = ServiceCase(
+    DOMAIN, SERVICE_FORCE_ARM, {"mode": "away"}, commands.set_areas([0])
+)
+DISARM = ServiceCase(
+    "alarm_control_panel", "alarm_disarm", {}, commands.unset_areas([0])
+)
+
+
 @pytest.mark.parametrize(
-    ("service", "expected"),
-    [
-        ("alarm_arm_away", commands.set_areas([0])),
-        ("alarm_disarm", commands.unset_areas([0])),
-    ],
-    ids=["arm away", "disarm"],
+    "case", [ARM_AWAY, FORCE_ARM, DISARM], ids=["arm away", "force arm", "disarm"]
 )
 async def test_a_service_call_sends_exactly_its_command(
-    hass: HomeAssistant,
-    cloud: FakeCloud,
-    loaded: MockConfigEntry,
-    service: str,
-    expected: bytes,
+    hass: HomeAssistant, cloud: FakeCloud, loaded: MockConfigEntry, case: ServiceCase
 ) -> None:
     del loaded  # requested so the entities exist
-    if service == "alarm_disarm":
+    target = {ATTR_ENTITY_ID: entity_id(hass, "alarm")}
+    if case is DISARM:
         await hass.services.async_call(
-            "alarm_control_panel",
-            "alarm_arm_away",
-            {ATTR_ENTITY_ID: entity_id(hass, "alarm")},
-            blocking=True,
+            ARM_AWAY.domain, ARM_AWAY.service, target, blocking=True
         )
     before = len(state_commands(cloud.panels))
     await hass.services.async_call(
-        "alarm_control_panel",
-        service,
-        {ATTR_ENTITY_ID: entity_id(hass, "alarm")},
-        blocking=True,
+        case.domain, case.service, {**target, **case.data}, blocking=True
     )
-    assert state_commands(cloud.panels)[before:] == [expected]
+    assert state_commands(cloud.panels)[before:] == [case.expected]
