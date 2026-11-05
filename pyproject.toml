@@ -48,6 +48,7 @@ test = [
     "pytest-asyncio>=1.0",
     "pytest-cov>=6",
     "hypothesis>=6.130",
+    "pytest-timeout>=2.3",
 ]
 # Home Assistant test harness for custom_components/. HA dropped Python 3.13 in
 # 2026.3, so 3.13 tests run against HA 2026.2.3 (the last release that supports it)
@@ -186,6 +187,10 @@ filterwarnings = [
     "ignore:It looks like `register_random` was passed an object:hypothesis.errors.HypothesisWarning",
 ]
 xfail_strict = true
+# A hang in async connection code must fail fast instead of stalling CI. The slowest
+# test takes about 3 s on the Python 3.13 leg, so 30 s leaves ample headroom for slow
+# runners. Long runs (the nightly Hypothesis profile, mutmut) pass --timeout=0.
+timeout = 30
 
 [tool.coverage.run]
 branch = true

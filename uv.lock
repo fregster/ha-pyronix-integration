@@ -4228,6 +4228,7 @@ dev = [
     { name = "pytest-cov", version = "7.1.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13.2' or python_full_version >= '3.14'" },
     { name = "pytest-homeassistant-custom-component", version = "0.13.316", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.13.2' and python_full_version < '3.14'" },
     { name = "pytest-homeassistant-custom-component", version = "0.13.375", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14.2'" },
+    { name = "pytest-timeout" },
     { name = "python-dotenv" },
     { name = "reuse" },
     { name = "ruff" },
@@ -4257,6 +4258,7 @@ test = [
     { name = "pytest-asyncio", version = "1.4.1.post1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13.2' or (python_full_version >= '3.14' and python_full_version < '3.14.2')" },
     { name = "pytest-cov", version = "7.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.13.2' and python_full_version < '3.14'" },
     { name = "pytest-cov", version = "7.1.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13.2' or python_full_version >= '3.14'" },
+    { name = "pytest-timeout" },
 ]
 
 [package.metadata]
@@ -4276,6 +4278,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=6" },
     { name = "pytest-homeassistant-custom-component", marker = "python_full_version >= '3.13.2' and python_full_version < '3.14'", specifier = "==0.13.316" },
     { name = "pytest-homeassistant-custom-component", marker = "python_full_version >= '3.14.2'", specifier = "==0.13.375" },
+    { name = "pytest-timeout", specifier = ">=2.3" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "reuse", specifier = ">=5" },
     { name = "ruff", specifier = "==0.17.3" },
@@ -4300,6 +4303,7 @@ test = [
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-asyncio", specifier = ">=1.0" },
     { name = "pytest-cov", specifier = ">=6" },
+    { name = "pytest-timeout", specifier = ">=2.3" },
 ]
 
 [[package]]
@@ -4697,6 +4701,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pytest", version = "9.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.13.2' and python_full_version < '3.14'" },
     { name = "pytest", version = "9.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14.2'" },
+    { name = "pytest", version = "9.2.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13.2' or (python_full_version >= '3.14' and python_full_version < '3.14.2')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ac/82/4c9ecabab13363e72d880f2fb504c5f750433b2b6f16e99f4ec21ada284c/pytest_timeout-2.4.0.tar.gz", hash = "sha256:7e68e90b01f9eff71332b25001f85c75495fc4e3a836701876183c4bcfd0540a", size = 17973 }
 wheels = [
