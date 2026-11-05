@@ -26,6 +26,7 @@ from pyronix_cloud.errors import (
     NotConnectedError,
     PyronixError,
 )
+from pyronix_cloud.not_polling_retry import NotPollingRetry, RetryPolicy
 from pyronix_cloud.panel_feed import PanelFeed
 from pyronix_cloud.session import ProtocolSession
 from pyronix_cloud.settings import Credentials, Timeouts
@@ -39,7 +40,7 @@ if TYPE_CHECKING:
     from pyronix_cloud.panel_state import PanelSnapshot
     from pyronix_cloud.websocket import Connector
 
-__all__ = ["Credentials", "PyronixClient", "Timeouts"]
+__all__ = ["Credentials", "PyronixClient", "RetryPolicy", "Timeouts"]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ class PyronixClient:
         *,
         url: str = LIVE_URL,
         timeouts: Timeouts | None = None,
+        retry: RetryPolicy | None = None,
     ) -> None:
         """Prepare the client; nothing is sent until :meth:`connect`.
 
@@ -64,6 +66,8 @@ class PyronixClient:
             connector: Opens the WebSocket (see ``aiohttp_connector``).
             url: The cloud relay URL.
             timeouts: Phase timeouts; :class:`Timeouts` defaults if None.
+            retry: Connection retries after cloud reply ``n``;
+                :class:`RetryPolicy` defaults if None.
 
         Raises:
             ValueError: A credential is malformed (the value is not echoed).
@@ -81,6 +85,7 @@ class PyronixClient:
         self._url = url
         self._timeouts = timeouts or Timeouts()
         self._feed = PanelFeed(self._timeouts)
+        self._retry = NotPollingRetry(retry or RetryPolicy())
         self._connection: Connection | None = None
         self._connected = False
         self._disconnect_listeners: list[DisconnectListener] = []
@@ -118,8 +123,10 @@ class PyronixClient:
     async def connect(self) -> PanelSnapshot:
         """Open a session and wait for the panel's login dump.
 
-        On any failure or cancellation the goodbye is sent and the socket
-        closed before the error propagates.
+        A connection the cloud refuses with ``n`` is retried as the retry
+        policy says, before any panel command can be sent. On any failure or
+        cancellation the goodbye is sent and the socket closed before the
+        error propagates; :meth:`close` also ends a pending retry.
 
         Returns:
             The snapshot once the dump is complete.
@@ -132,6 +139,10 @@ class PyronixClient:
             PyronixTimeoutError: A stage or the dump did not finish in time.
             PyronixError: Any other protocol or socket failure.
         """
+        return await self._retry.run(self._connect_once)
+
+    async def _connect_once(self) -> PanelSnapshot:
+        """Make one connection attempt; see :meth:`connect`."""
         if self._connection is not None:
             msg = "the client already has a session; close it first"
             raise RuntimeError(msg)
@@ -211,6 +222,7 @@ class PyronixClient:
         takes at most ``Timeouts.close``.
         """
         self._connected = False
+        self._retry.stop()
         connection, self._connection = self._connection, None
         if connection is not None:
             await connection.close()

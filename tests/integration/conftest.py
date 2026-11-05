@@ -24,7 +24,7 @@ from custom_components.pyronix_cloud.const import (
     MODE_PERSISTENT,
     ConnectionState,
 )
-from pyronix_cloud import Backoff, Timeouts
+from pyronix_cloud import NO_RETRY, Backoff, RetryPolicy, Timeouts
 from pyronix_cloud.testing import dump
 from pyronix_cloud.testing.fake_cloud import CloudBehaviour, FakeCloud
 from pyronix_cloud.testing.fake_panel import FakePanel, PanelBehaviour
@@ -113,6 +113,12 @@ def panel_behaviour() -> PanelBehaviour:
 
 
 @pytest.fixture
+def retry_policy() -> RetryPolicy:
+    """Retries after cloud reply `n`; none unless a test parametrises it."""
+    return NO_RETRY
+
+
+@pytest.fixture
 def gate() -> Gate:
     """Control over new connections."""
     return Gate()
@@ -120,7 +126,10 @@ def gate() -> Gate:
 
 @pytest.fixture(autouse=True)
 async def cloud(
-    cloud_behaviour: CloudBehaviour, panel_behaviour: PanelBehaviour, gate: Gate
+    cloud_behaviour: CloudBehaviour,
+    panel_behaviour: PanelBehaviour,
+    gate: Gate,
+    retry_policy: RetryPolicy,
 ) -> AsyncIterator[FakeCloud]:
     """Route every client to an in-memory fake cloud; no test opens a socket."""
     areas: dict[int, int] = {}
@@ -146,6 +155,10 @@ async def cloud(
             patch(
                 "custom_components.pyronix_cloud.client_factory.session_timeouts",
                 return_value=FAST,
+            ),
+            patch(
+                "custom_components.pyronix_cloud.client_factory.not_polling_retry",
+                return_value=retry_policy,
             ),
             patch(
                 "custom_components.pyronix_cloud.live.new_backoff",

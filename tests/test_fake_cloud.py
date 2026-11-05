@@ -361,3 +361,23 @@ def test_cli_main_stops_when_told(capsys: pytest.CaptureFixture[str]) -> None:
     stop.set()
     assert cli.main(["--port", "0"], stop) == 0
     assert "System ID:    TESTPANL" in capsys.readouterr().out
+
+
+async def test_refuses_with_n_after_a_session_ends() -> None:
+    async with FakeCloud(CloudBehaviour(not_polling_after_end=2)) as cloud:
+        first = await client(cloud)
+        await first.connect()
+        await first.ws.close()
+        for _ in range(2):
+            refused = await client(cloud)
+            assert await refused.ask(CloudRequest.SUBSCRIPTION) == "<e>j </e>"
+            assert await refused.ask(CloudRequest.CONN_TO_CLOUD) == "<e>n </e>"
+            await refused.ws.close()  # a refused session does not restart the count
+        accepted = await client(cloud)
+        await accepted.connect()
+
+
+async def test_no_refusal_before_any_session_ends() -> None:
+    async with FakeCloud(CloudBehaviour(not_polling_after_end=3)) as cloud:
+        app = await client(cloud)
+        await app.connect()
