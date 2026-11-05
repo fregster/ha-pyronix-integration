@@ -130,7 +130,7 @@ uv run python probe/pyronix_probe.py --dry-run
 | Complexity | ruff `C901`, `PLR09xx` | complexity ≤ 10, branches ≤ 12, returns ≤ 6, args ≤ 5, statements ≤ 50 |
 | Types | `mypy --strict` | plus `warn_unreachable` and extra error codes; library ships `py.typed` |
 | Tests | `pytest`, `pytest-cov`, `hypothesis` | branch coverage ≥ 95 % for the library; 100 % for `config_flow.py` |
-| Secrets | `gitleaks`, `detect-private-key` | no codes, System IDs or keys in git history |
+| Secrets | `gitleaks` (`.gitleaks.toml`), `detect-private-key` | no codes, System IDs, keys or full local paths (home or temp dirs) in git history |
 | Licences | `reuse lint` | every file has SPDX info (header or `REUSE.toml`) |
 | Spelling | `codespell` | |
 | File size | `tools/check_module_size.py` | line budgets per path; see *File focus* below |
