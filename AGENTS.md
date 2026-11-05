@@ -23,11 +23,16 @@ unprotected, or lock out a user.
    once the user has supplied credentials.
 2. **Never make a live connection to `pyronixcloud.com` unless the user asks you to.** Repeated
    failed logins may lock the panel or trigger tamper/alerts. If a run fails, stop and report.
-   Do not retry in a loop.
+   Do not retry in a loop. The only automatic retry in the code is the bounded connection retry
+   on cloud reply `n` (`not_polling_retry.py`). It happens before login, so it never costs a
+   failed login, and before any command is sent. Never add retries after an authentication
+   failure or after a command has been written.
 3. **Secrets:** `.env` holds the panel app password and keypad user code.
    - Never print, log, commit or paste these values.
    - Redact them in logs (`PanelPwd`, `<z>…</z>`, the login payload `",code\n"`).
    - HA diagnostics must use `async_redact_data`.
+   - The HA arm/disarm PIN is stored only as a salted scrypt hash (`pin_hash.py`); never store,
+     log or show the PIN itself.
 4. **Never commit** `apk/`, `decompiled/`, `reference/`, `.env`, `probe/.device_id`, packet
    captures, or logs that contain credentials or raw session keys.
 5. Do not try to bypass `com.pairip`, Play integrity, or the cloud's subscription checks.
@@ -48,15 +53,24 @@ unprotected, or lock out a user.
 
 ```
 custom_components/pyronix_cloud
-  config_flow.py      user/reauth/reconfigure/options; validates with one short read-only session
+  config_flow.py      user/reauth/reconfigure, then the access step; one short read-only session
+  options_flow.py     poll interval, live updates, access mode, always-force-arm
+  access_form.py      access-mode fields and checks shared by the setup and options flows
+  access.py           who may arm/disarm: PIN, selected HA users (+ automations), or anyone
+  pin_hash.py         salted scrypt hash and constant-time check of the arm/disarm PIN
+  access_issue.py     repair issue for entries that predate the access setting
   client_factory.py   builds PyronixClient from the entry (HA's aiohttp session injected)
   coordinator.py      DataUpdateCoordinator: on-demand short sessions, one lock per panel
   live.py             persistent mode: one open session, pushes, reconnect with back-off
+  services.py         registers the pyronix_cloud.force_arm entity action
+  device_firmware.py  updates the device's sw_version when the panel firmware changes
   alarm_control_panel.py / binary_sensor.py / sensor.py / diagnostics.py (redacted)
         │
         ▼
 pyronix_cloud (library)                       sans-IO unless marked
   client.py           PyronixClient: connect / arm / disarm / close, listeners      (async)
+  area_commands.py    sends set/unset, waits for confirmation or refusal            (async)
+  not_polling_retry.py  bounded connection retry on cloud reply `n`               (async)
   connection.py       drives a ProtocolSession over a WebSocket, guarantees goodbye (async)
   panel_feed.py       session events → snapshots; waits with deadlines             (async)
   websocket.py        WebSocket Protocol + aiohttp adapter                          (async)
@@ -91,7 +105,12 @@ pyronix_cloud (library)                       sans-IO unless marked
 - **Pure functions for the protocol** (framing, crypto, message builders and parsers), so they can
   be unit-tested without a network.
 - **The library has no knowledge of HA.** Typed models and a small client API:
-  `connect()`, `arm(areas, force=True)`, `disarm(areas)`, `set_output()`, `omit()`, `close()`.
+  `connect()`, `arm(areas, force=True)`, `disarm(areas)`, `close()` (`set_output()` and `omit()`
+  are planned). The library default `force=True` matches the app; the integration always passes
+  `force` explicitly and only force-arms through the `force_arm` action or the "always force arm"
+  option. A plain arm (`force=False`) raises `SetRefusedError` with the panel's reason.
+- **Every arm/disarm passes the access check** (`access.py`) before it reaches the library. New
+  entry points that change alarm state (actions, buttons, services) must call it too.
 - `cryptography`: CFB comes from `cryptography.hazmat.decrepit.ciphers.modes` when available
   (`modes.CFB` is deprecated). HA 2026.2 ships cryptography 46, which lacks it, so `crypto.py`
   resolves the class at runtime; keep that working.

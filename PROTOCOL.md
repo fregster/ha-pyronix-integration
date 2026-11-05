@@ -896,7 +896,8 @@ b_payload = b"\x01" + pub
 **Suggested Home Assistant design (design choices, not observed behaviour):**
 
 - **Config flow inputs:** device name (`AppUser`), System ID (`PanelId`), App password, user code, plus a generated stable
-  `DeviceId`. The `PushId` value needs testing (see §13).
+  `DeviceId`. A dummy `PushId` is accepted (§13 Q1). The integration also asks who may arm and
+  disarm (a PIN, selected HA users, or anyone); that is an HA-side check, not part of the protocol.
 - **Connection:** the panel allows **one remote session at a time** (§13 Q11), so a permanent
   connection locks out the HomeControl2 app. Two modes:
   - **On-demand (default):** connect, log in, read the state dump (~2 s), send goodbye `E`,
@@ -907,14 +908,19 @@ b_payload = b"\x01" + pub
     while connected (exact behaviour on contention: §13 Q11).
   Always end with the `E` goodbye frame; the slot frees as soon as the WebSocket closes.
   **Reported (third-party):** the cloud may still answer `n` for up to ~35 s after a goodbye
-  (§3.4), so an on-demand poll or command shortly after the previous session can fail.
+  (§3.4), so an on-demand poll or command shortly after the previous session can fail. The
+  library retries the *connection* on `n` (default 4 × 10 s, `RetryPolicy`); `n` arrives at the
+  cloud stage, before login and before any command, so a retry never repeats a command.
 - **Entities:**
   - `alarm_control_panel`: one per panel on level-set systems, one per area on area systems (§6.3).
   - `binary_sensor` per input (`V == Open`), with an `omitted` attribute.
   - `switch` per output (opcode `0x31`).
   - A sensor for faults; the history log on demand.
-- **Arming** uses `SPI_SET_AREAS` with force-omit (the app default). Make force-omit an option.
-  The non-forced form is reported to work (§5).
+- **Arming** uses `SPI_SET_AREAS`. The app always sets with force-omit; the integration does not
+  by default. A plain set is refused before sending while an area is `V` 4/5 (with its `Faults`
+  text as the reason), and a `V` 4/5/6 after sending ends the wait as a refusal; `V` 3, 1 or 2
+  (setting, set, alarmed) confirms it. Force-omit is a separate action (`pyronix_cloud.force_arm`) or an "always force
+  arm" option. The non-forced form is reported to work (§5) but not yet observed by us.
 
 ---
 
