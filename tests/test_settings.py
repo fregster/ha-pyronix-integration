@@ -21,4 +21,6 @@ def test_credentials_hide_secrets() -> None:
 
 
 def test_timeout_defaults() -> None:
-    assert Timeouts() == Timeouts(connect=15, step=15, dump=10, command=15, close=5)
+    assert Timeouts() == Timeouts(
+        connect=15, step=15, dump=10, command=15, close=5, silence=130
+    )

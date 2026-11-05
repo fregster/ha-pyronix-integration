@@ -256,6 +256,10 @@ encrypted panel heartbeat, opcode `0x20` (`HomeControl.java:508-512`).
 connect and cancelled on every received message. On expiry it calls `noReplyFromCloud()`
 (`NO_REPLY_FROM_CLOUD`).
 
+- **Library choice (not protocol):** `pyronix_cloud` likewise ends a session after
+  `Timeouts.silence` (130 s, about 2.5 heartbeats) without any inbound message, then reconnects in
+  live mode. Like the app, it sends no heartbeats of its own.
+
 ---
 
 ## 4. Layer 2 — Encrypted panel session

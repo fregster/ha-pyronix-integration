@@ -7,7 +7,8 @@ A :class:`Connection` owns one open socket and one
 inbound message into the session, sends what the session asks for and hands
 the events to a callback. Every way out, whether a reader error, a panel
 goodbye, :meth:`Connection.close` or cancellation, sends the session's goodbye
-(best effort) and closes the socket (PROTOCOL.md §4.8).
+(best effort) and closes the socket (PROTOCOL.md §4.8). A socket that stays
+silent for longer than the silence timeout counts as a reader error.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ import aiohttp
 
 from pyronix_cloud.errors import (
     ConnectionClosedError,
+    ConnectionSilentError,
     NotConnectedError,
     ProtocolError,
     PyronixError,
@@ -37,6 +39,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from pyronix_cloud.session import ProtocolSession, SessionOutput
+    from pyronix_cloud.settings import Timeouts
     from pyronix_cloud.websocket import Connector, WebSocket
 
 _LOGGER = logging.getLogger(__name__)
@@ -73,7 +76,7 @@ class Connection:
         *,
         on_event: EventHandler,
         on_end: EndHandler,
-        close_timeout: float,
+        timeouts: Timeouts,
     ) -> None:
         """Attach to an open socket; nothing is sent until :meth:`start`.
 
@@ -85,13 +88,16 @@ class Connection:
             on_end: Called once if the session ends on its own: with the error,
                 or None after a clean panel goodbye. Not called after
                 :meth:`close`.
-            close_timeout: Seconds allowed for the goodbye and socket close.
+            timeouts: ``close`` bounds the goodbye and socket close;
+                ``silence`` is how long the socket may stay quiet before the
+                session ends with :class:`ConnectionSilentError`.
         """
         self._socket = socket
         self._session = session
         self._on_event = on_event
         self._on_end = on_end
-        self._close_timeout = close_timeout
+        self._close_timeout = timeouts.close
+        self._silence_timeout = timeouts.silence
         self._lock = asyncio.Lock()
         self._reader: asyncio.Task[None] | None = None
         self._closer: asyncio.Task[None] | None = None
@@ -127,7 +133,7 @@ class Connection:
         """Say goodbye, close the socket and stop the reader. Idempotent.
 
         The work runs in its own task, so cancelling the caller does not stop
-        the goodbye; it is bounded by ``close_timeout``.
+        the goodbye; it is bounded by ``Timeouts.close``.
         """
         if self._closer is None:
             self._closer = asyncio.get_running_loop().create_task(
@@ -182,9 +188,13 @@ class Connection:
             raise ConnectionClosedError(msg) from err
 
     async def _receive(self) -> str | bytes:
-        """Return the next message, or raise once the socket has closed."""
+        """Return the next message; raise once the socket closed or went silent."""
         try:
-            message = await self._socket.receive()
+            async with asyncio.timeout(self._silence_timeout):
+                message = await self._socket.receive()
+        except TimeoutError as err:  # before _SOCKET_ERRORS: it is an OSError
+            msg = f"no message from the cloud relay for {self._silence_timeout:g} s"
+            raise ConnectionSilentError(msg) from err
         except _SOCKET_ERRORS as err:
             msg = f"receiving failed: {type(err).__name__}"
             raise ConnectionClosedError(msg) from err

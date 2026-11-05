@@ -151,7 +151,7 @@ class PyronixClient:
             session,
             on_event=self._feed.handle,
             on_end=self._on_end,
-            close_timeout=self._timeouts.close,
+            timeouts=self._timeouts,
         )
         self._connection = connection
         try:

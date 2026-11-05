@@ -38,3 +38,11 @@ class Timeouts:
     """The panel's confirmation of a set or unset command."""
     close: float = 5.0
     """The goodbye and the socket close."""
+    silence: float = 130.0
+    """Any inbound message, before the session is treated as dead.
+
+    The cloud sends its heartbeat about every 51 s (PROTOCOL.md §3.4), so a
+    healthy session is never this quiet: 130 s allows for about two missed or
+    late heartbeats before a half-open socket is given up on. This is the
+    library's own watchdog; the app only answers heartbeats and sends none.
+    """
