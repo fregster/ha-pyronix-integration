@@ -38,11 +38,14 @@ from .const import (
     CONF_APP_USER,
     CONF_CLOUD_URL,
     CONF_DEVICE_ID,
+    CONF_LIVE_UPDATES,
+    CONF_MODE,
     CONF_PANEL_ID,
     CONF_USER_CODE,
     DEFAULT_APP_USER,
     DEVICE_ID_BYTES,
     DOMAIN,
+    MODE_PERSISTENT,
 )
 from .input_checks import field_errors, normalise_system_id, url_allowed
 from .options_flow import PyronixOptionsFlow
@@ -86,6 +89,7 @@ _USER_SCHEMA: Final = vol.Schema(
         vol.Required(CONF_APP_USER, default=DEFAULT_APP_USER): str,
         vol.Required(CONF_PANEL_ID): str,
         **_SECRETS_SCHEMA,
+        vol.Optional(CONF_LIVE_UPDATES, default=False): bool,
         vol.Required(CONF_ADVANCED): section(
             vol.Schema(  # type: ignore[arg-type,unused-ignore]  # probatio on HA >= 2026.3
                 {vol.Optional(CONF_CLOUD_URL, default=LIVE_URL): str}
@@ -107,12 +111,23 @@ def _user_errors(user_input: Mapping[str, Any]) -> dict[str, str]:
 
 def _entry_data(user_input: Mapping[str, Any], device_id: str) -> dict[str, Any]:
     """Return entry data from the user step; the URL is kept only if not the default."""
-    data = {key: value for key, value in user_input.items() if key != CONF_ADVANCED}
+    data = {
+        key: value
+        for key, value in user_input.items()
+        if key not in {CONF_ADVANCED, CONF_LIVE_UPDATES}
+    }
     data[CONF_DEVICE_ID] = device_id
     url = user_input[CONF_ADVANCED].get(CONF_CLOUD_URL, LIVE_URL)
     if url != LIVE_URL:
         data[CONF_CLOUD_URL] = url
     return data
+
+
+def _entry_options(user_input: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the new entry's options: persistent mode if live updates were ticked."""
+    if user_input.get(CONF_LIVE_UPDATES, False):
+        return {CONF_MODE: MODE_PERSISTENT}
+    return {}
 
 
 def _error_key(err: Exception) -> str:
@@ -170,7 +185,11 @@ class PyronixConfigFlow(ConfigFlow, domain=DOMAIN):
                 if isinstance(result, str):
                     errors["base"] = result
                 else:
-                    return self.async_create_entry(title=_title(result), data=data)
+                    return self.async_create_entry(
+                        title=_title(result),
+                        data=data,
+                        options=_entry_options(user_input),
+                    )
         return self.async_show_form(
             step_id="user",
             data_schema=self.add_suggested_values_to_schema(

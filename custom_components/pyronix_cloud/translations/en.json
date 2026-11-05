@@ -8,13 +8,15 @@
           "app_user": "Device name",
           "panel_id": "System ID",
           "app_password": "App password",
-          "user_code": "User code"
+          "user_code": "User code",
+          "live_updates": "Live updates"
         },
         "data_description": {
           "app_user": "The name the panel's event log shows for Home Assistant.",
           "panel_id": "The 8-character System ID you entered when you added the panel to the app.",
           "app_password": "The app password your installer set on the panel.",
-          "user_code": "Your keypad user code. Home Assistant arms and disarms with this user's rights."
+          "user_code": "Your keypad user code. Home Assistant arms and disarms with this user's rights.",
+          "live_updates": "Keeps a session to the panel open all the time, so alarms and changes reach Home Assistant in real time. Warning: the panel allows only one remote session, so this blocks the HomeControl2 app and anyone else who uses it. You can change this later in the integration's options."
         },
         "sections": {
           "advanced": {

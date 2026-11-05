@@ -113,6 +113,9 @@ UV_PROJECT_ENVIRONMENT=.venv-313 uv sync --frozen --python 3.13
 
 # Fake cloud for a dev Home Assistant (System ID TESTPANL; credentials printed):
 uv run python -m pyronix_cloud.testing --port 8765
+# Push the working tree to the local test HA OS host and restart it (PYRONIX_HA_HOST).
+# A restart reloads the configured entry, which logs in to the real panel.
+tools/deploy_test_ha.sh            # --no-restart to copy only
 uv run pytest probe --no-cov -o addopts=""   # probe's offline tests, no network
 uv run python probe/pyronix_probe.py --dry-run
 ```
