@@ -83,7 +83,7 @@ target-version = "py313"
 src = ["src", "tests", "tools", "."]
 # The probe is a frozen research tool: linted with a relaxed profile (below), but
 # not reformatted. Its logic is ported into src/ properly rather than polished.
-extend-exclude = ["decompiled", "apk"]
+extend-exclude = ["decompiled", "apk", "reference"]
 
 [tool.ruff.format]
 # PROTOCOL.md's Python snippets mirror the Java line by line; keep them as written.
@@ -216,4 +216,4 @@ rules = [
     { glob = "custom_components/**", max = 300 },
     { glob = "tools/**", max = 200 },
 ]
-exclude = ["probe/**", "decompiled/**", "apk/**"]
+exclude = ["probe/**", "decompiled/**", "apk/**", "reference/**"]

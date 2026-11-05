@@ -1,6 +1,6 @@
 # Run `uv run pre-commit install` once per clone. CI runs the same hooks.
 default_install_hook_types: [pre-commit]
-exclude: ^(decompiled|apk|LICENSES)/
+exclude: ^(decompiled|apk|reference|LICENSES)/
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
