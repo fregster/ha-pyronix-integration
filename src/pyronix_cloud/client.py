@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Self
 
 from pyronix_cloud import commands
 from pyronix_cloud.area_commands import arm_areas, disarm_areas
-from pyronix_cloud.cloud import LIVE_URL, CloudIdentity
+from pyronix_cloud.cloud import LIVE_URL, AppProfile, CloudIdentity
 from pyronix_cloud.connection import Connection, open_socket
 from pyronix_cloud.errors import (
     ConnectionClosedError,
@@ -48,7 +48,7 @@ type DisconnectListener = Callable[[BaseException | None], None]
 class PyronixClient:
     """One panel session over the Pyronix Cloud relay."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - all but two are keyword-only options with defaults
         self,
         credentials: Credentials,
         connector: Connector,
@@ -56,6 +56,7 @@ class PyronixClient:
         url: str = LIVE_URL,
         timeouts: Timeouts | None = None,
         retry: RetryPolicy | None = None,
+        app_profile: AppProfile | None = None,
     ) -> None:
         """Prepare the client; nothing is sent until :meth:`connect`.
 
@@ -66,6 +67,8 @@ class PyronixClient:
             timeouts: Phase timeouts; :class:`Timeouts` defaults if None.
             retry: Connection retries after cloud reply ``n``;
                 :class:`RetryPolicy` defaults if None.
+            app_profile: The app identity sent to the cloud; the HomeControl2
+                app's values (:class:`AppProfile` defaults) if None.
 
         Raises:
             ValueError: A credential is malformed (the value is not echoed).
@@ -77,6 +80,7 @@ class PyronixClient:
             app_password=credentials.app_password,
             device_id=credentials.device_id,
             push_id=credentials.push_id,
+            profile=app_profile or AppProfile(),
         )
         commands.login(credentials.user_code)  # validate the code now, not later
         self._connector = connector

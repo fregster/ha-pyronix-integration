@@ -11,3 +11,8 @@ def test_version_is_a_string() -> None:
 
 def test_package_is_typed() -> None:
     assert (Path(pyronix_cloud.__file__).parent / "py.typed").is_file()
+
+
+def test_app_profile_is_exported() -> None:
+    assert "AppProfile" in pyronix_cloud.__all__
+    assert pyronix_cloud.AppProfile().app_version == "6.03.001"
