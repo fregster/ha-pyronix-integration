@@ -6,15 +6,19 @@ rules:
   appropriate-polling: done
   brands:
     status: todo
-    comment: Brand images are not submitted yet (README roadmap step 4).
+    comment: |
+      The icons ship in brand/ (read by HA 2026.3+), but the rule needs them in
+      the home-assistant/brands repository: open a PR adding
+      core_integrations/pyronix_cloud/ there (a user action).
   common-modules: done
   config-flow-test-coverage: done
   config-flow: done
   dependency-transparency:
-    status: todo
+    status: done
     comment: |
-      pyronix-cloud lives in this repository (src/) under an OSI licence but is
-      not published to PyPI with a tagged CI release yet (README roadmap step 4).
+      pyronix-cloud (LGPL-3.0-or-later) is published to PyPI by the public
+      release.yml workflow with Trusted Publishing; each version matches a
+      v* tag in this repository.
   docs-actions:
     status: done
     comment: The README section "Arming and force arming" documents force_arm.
@@ -23,9 +27,7 @@ rules:
     comment: This integration does not provide any conditions.
   docs-high-level-description: done
   docs-installation-instructions: done
-  docs-removal-instructions:
-    status: todo
-    comment: The README does not explain how to remove the integration yet.
+  docs-removal-instructions: done
   docs-triggers:
     status: exempt
     comment: This integration does not provide any triggers.
@@ -45,11 +47,7 @@ rules:
   # Silver
   action-exceptions: done
   config-entry-unloading: done
-  docs-configuration-parameters:
-    status: todo
-    comment: |
-      The README describes both options (connection mode, poll interval) but
-      not the poll interval's 1 to 60 minute range or the options dialog.
+  docs-configuration-parameters: done
   docs-installation-parameters: done
   entity-unavailable: done
   integration-owner: done
@@ -70,22 +68,12 @@ rules:
       The panel is reached only through the Pyronix Cloud relay by System ID;
       it does not announce itself on the local network.
   docs-data-update: done
-  docs-examples:
-    status: todo
-    comment: The README has no automation examples yet.
-  docs-known-limitations:
-    status: todo
-    comment: |
-      Limitations (one remote session, untested arming on a real panel) are
-      mentioned in the README but not collected in a known-limitations section.
+  docs-examples: done
+  docs-known-limitations: done
   docs-supported-devices: done
   docs-supported-functions: done
-  docs-troubleshooting:
-    status: todo
-    comment: The README has no troubleshooting section yet.
-  docs-use-cases:
-    status: todo
-    comment: The README has no use-case section yet.
+  docs-troubleshooting: done
+  docs-use-cases: done
   dynamic-devices:
     status: done
     comment: |
