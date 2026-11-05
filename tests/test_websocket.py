@@ -12,6 +12,7 @@ import pytest
 from pyronix_cloud.errors import CommunicationError
 from pyronix_cloud.websocket import (
     CLOSE_CODE_GOING_AWAY,
+    AiohttpWebSocket,
     WebSocket,
     aiohttp_connector,
 )
@@ -83,6 +84,19 @@ async def test_text_binary_and_close(
     await ws.close()  # idempotent
     assert _is_closed(ws)
     assert server.app[SEEN]["agent"] == "test-agent"
+
+
+async def test_receive_skips_control_frames(
+    server: TestServer, session: aiohttp.ClientSession
+) -> None:
+    # With autoping off, aiohttp hands the PING to receive(), which must skip it.
+    raw = await session.ws_connect(
+        str(server.make_url("/")).replace("http", "ws"), autoping=False
+    )
+    ws = AiohttpWebSocket(raw)
+    await ws.send_text("ping")
+    assert await ws.receive() == "after-ping"
+    await ws.close()
 
 
 async def test_receive_returns_none_when_server_closes(
