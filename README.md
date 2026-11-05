@@ -468,7 +468,7 @@ apk/, decompiled/, reference/  Local-only reverse-engineering inputs (gitignored
 1. ~~Probe~~: done; read-only live sessions answered most of PROTOCOL.md §13.
 2. ~~Library~~ and ~~integration~~: first version done, tested offline.
 3. Confirm a real set/unset sequence on a live panel (§13 Q12), then outputs, omit and the log.
-4. ~~Publish `pyronix-cloud` to PyPI~~ (0.1.0 is out); list in HACS, submit brand images;
+4. ~~Publish `pyronix-cloud` to PyPI~~ (0.2.0 is out); list in HACS, submit brand images;
    later, HA core.
 
 ## Developing against the fake panel
