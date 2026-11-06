@@ -2,33 +2,70 @@
 
 [![CI](https://github.com/fregster/ha-pyronix-integration/actions/workflows/ci.yml/badge.svg)](https://github.com/fregster/ha-pyronix-integration/actions/workflows/ci.yml)
 [![GitHub release](https://img.shields.io/github/v/release/fregster/ha-pyronix-integration?include_prereleases)](https://github.com/fregster/ha-pyronix-integration/releases)
+[![HACS](https://img.shields.io/badge/HACS-integration-41BDF5.svg)](https://hacs.xyz)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026.2%2B-41BDF5.svg)](https://www.home-assistant.io)
+[![PyPI](https://img.shields.io/pypi/v/pyronix-cloud.svg?label=pyronix-cloud)](https://pypi.org/project/pyronix-cloud/)
 
 [![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=fregster&repository=ha-pyronix-integration&category=integration)
 
-> **Status: pre-alpha.** The protocol was worked out from the Android app (see
-> [PROTOCOL.md](PROTOCOL.md)). Read-only sessions (handshake, login, state dump, pushed updates)
-> have been tested against a real Euro 46. The library and integration are tested offline against
-> a fake panel; **arming and disarming have not been tested on a real panel yet.** Do not rely on
-> this to protect your property.
+Monitor and control Pyronix intruder alarm panels (Euro 46, Enforcer) from Home Assistant. The
+integration connects through the Pyronix Cloud, the same end-to-end encrypted relay used by the
+official **HomeControl2.0** app, so no additional hardware or panel changes are required.
 
-An unofficial Home Assistant custom integration for Pyronix intruder alarm panels (Enforcer,
-Euro 46). It uses the same Pyronix Cloud relay as the official **HomeControl2.0** app.
+> [!NOTE]
+> **Status: beta.** Arming, disarming, force arming, state polling and live updates have been
+> verified against a real Pyronix Euro 46. The library and integration are also covered by an
+> offline test suite with 100 % branch coverage against a simulated cloud and panel. This is an
+> unofficial integration and is not a substitute for a monitored alarm; see
+> [Known limitations](#known-limitations).
 
 Not affiliated with or endorsed by Pyronix or Hikvision.
 
-## What you can use it for
+## Contents
 
-- **See the alarm at a glance.** Show on a dashboard whether the alarm is set, which level or
-  area is set, and whether any input is open, wherever you are.
-- **Get told when something happens.** Send a notification when the alarm is set, unset or goes
-  off, or when the panel reports a fault.
-- **Arm with the rest of your home.** Set the night level at bedtime, or remind yourself (or
-  arm) when everyone has left.
-- **Use the alarm's sensors.** Door contacts and PIRs become binary sensors. With live updates
-  on they react within about a second, so they can drive lights or heating; in the default
-  on-demand mode they only update every few minutes.
+- [Highlights](#highlights)
+- [Compatibility](#compatibility)
+- [How it works](#how-it-works)
+- [Features](#features)
+- [Installation](#installation)
+- [Configuration](#what-you-need)
+- [Arming and force arming](#arming-and-force-arming)
+- [Automation examples](#automation-examples)
+- [Known limitations](#known-limitations)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+- [Licence](#licence)
+
+## Highlights
+
+- **Full alarm control.** Arm (away, night and custom levels, or individual areas), disarm and
+  force arm from dashboards, voice assistants and automations.
+- **Secure by default.** Every arm and disarm passes an access check: a PIN (stored only as a
+  salted scrypt hash), a list of permitted Home Assistant users, or no check at all, as you
+  choose.
+- **Clear feedback.** If the panel refuses to set, the action fails with the panel's own reason,
+  for example "Full Set cannot be armed: Landing DT Open".
+- **Every input as a sensor.** Door contacts, PIRs and other inputs become binary sensors that
+  can drive notifications, lighting and heating.
+- **Two connection modes.** Short on-demand sessions that keep the HomeControl2 app available
+  (default), or a persistent session with sub-second updates.
+- **Safe failure behaviour.** Commands are never retried automatically, sessions always close
+  cleanly, and credentials are redacted from logs and diagnostics.
 
 See [Automation examples](#automation-examples) for ready-made YAML.
+
+## Compatibility
+
+| Item | Supported |
+|---|---|
+| Home Assistant | 2026.2 or later |
+| Panels | Pyronix Euro 46 (verified). Enforcer uses the same protocol but has not been verified yet. |
+| Panel connectivity | Any module that connects the panel to the Pyronix Cloud (for example DIGI-WiFi or DIGI-LAN) |
+| Subscription | An active Pyronix Cloud subscription for the panel |
+| Panel modes | Level-set panels (levels A/B/C) and area-set panels |
+
+Reports from other models and firmware versions are welcome; please open an
+[issue](https://github.com/fregster/ha-pyronix-integration/issues).
 
 ## How it works
 
@@ -84,9 +121,10 @@ You need Home Assistant 2026.2 or later.
 
 [![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=fregster&repository=ha-pyronix-integration&category=integration)
 
-1. Click the button above, or in HACS add `https://github.com/fregster/ha-pyronix-integration`
-   as a custom repository (category *Integration*). Then install **Pyronix Cloud**. HACS
-   installs the `pyronix-cloud` library from PyPI.
+1. Click the button above, or search for **Pyronix Cloud** in HACS and install it. If it does
+   not appear yet, add `https://github.com/fregster/ha-pyronix-integration` as a custom
+   repository (category *Integration*) first. HACS installs the `pyronix-cloud` library from
+   PyPI.
 2. Restart Home Assistant.
 3. Add the **Pyronix Cloud** integration and enter the details below.
 
@@ -293,8 +331,8 @@ actions:
   the app.
 - **Not a monitored alarm.** Do not rely on Home Assistant to tell you about a break-in. Keep
   your alarm's own signalling or monitoring.
-- **Arming and disarming are not yet tested on a real panel.** Read-only sessions are tested on a
-  Euro 46. Other models (Enforcer) and other firmware are untested.
+- **Verified hardware.** All features are verified on a Euro 46. Other models (Enforcer) and
+  other firmware versions are expected to work but have not been verified.
 - **One command at a time.** A second arm or disarm while the first is still running fails with
   an error saying the panel is already busy with another command.
 - **No automatic retries of commands.** If the panel does not confirm a command, the integration
@@ -451,7 +489,9 @@ Nothing is left on the panel: the integration changes no panel settings and inst
 it, so the HomeControl2 app works as before. Past sessions stay in the panel's event log under the
 device name you chose.
 
-## Repository layout
+## Development
+
+### Repository layout
 
 ```
 PROTOCOL.md                 Reverse-engineered protocol specification
@@ -463,15 +503,14 @@ tests/                      Library tests; tests/integration/ holds the HA tests
 apk/, decompiled/, reference/  Local-only reverse-engineering inputs (gitignored, never committed)
 ```
 
-## Roadmap
+### Roadmap
 
 1. ~~Probe~~: done; read-only live sessions answered most of PROTOCOL.md §13.
-2. ~~Library~~ and ~~integration~~: first version done, tested offline.
-3. Confirm a real set/unset sequence on a live panel (§13 Q12), then outputs, omit and the log.
-4. ~~Publish `pyronix-cloud` to PyPI~~ (0.2.0 is out); list in HACS, submit brand images;
-   later, HA core.
+2. ~~Library~~ and ~~integration~~: done; arming and disarming verified on a live Euro 46.
+3. Outputs, input omit, the event log and PIR-camera photos.
+4. ~~Publish `pyronix-cloud` to PyPI~~ and list in the HACS default repository; later, HA core.
 
-## Developing against the fake panel
+### Developing against the fake panel
 
 ```bash
 uv run python -m pyronix_cloud.testing --port 8765
@@ -480,7 +519,7 @@ uv run python -m pyronix_cloud.testing --port 8765
 This serves a fake cloud relay and panel on `ws://127.0.0.1:8765` and prints its test
 credentials. In the config flow, open **Advanced** and set the cloud relay URL to it.
 
-## Trying the probe
+### Trying the probe
 
 ```bash
 cp .env.example .env        # then fill in your panel details
@@ -489,7 +528,7 @@ cp .env.example .env        # then fill in your panel details
 
 `.env` is gitignored. Never commit credentials, captures or logs that contain them.
 
-## Contributing / development
+### Contributing
 
 See [AGENTS.md](AGENTS.md) for conventions, safety rules and the development workflow. These apply
 to human and AI contributors alike.
