@@ -12,7 +12,7 @@ Reverse-engineered from the Android app to enable a Home Assistant integration.
 | Supported products (per library) | `"HomeControl+ Enforcer,Euro 46 App"` |
 | Date of analysis | 2026-11-04 |
 | Method | Static analysis (jadx 1.5.6), then read-only live sessions with `probe/` against a Euro 46 V10.26 (2026-11-04). Live findings are labelled **Observed (live)**. |
-| Revised | 2026-11-04: corrected after a line-by-line port to Python (`probe/`) against the Java. Places where the app's code has bugs are marked **App bug**. |
+| Revised | 2026-11-04: corrected after a line-by-line port to Python (`probe/`) against the Java. Places where the app's code has bugs are marked **App bug**. 2026-11-06: live set and unset through the integration recorded (§5, §6.3, §13 Q12). |
 
 All source paths below are relative to `decompiled/sources/` (gitignored; regenerate with
 `jadx -d decompiled apk/com.pyronixhc2.android.app.apk`).
@@ -486,7 +486,13 @@ These are sent as the plaintext payload of `D` frames (`HomeControl.java:954-111
 - **Reported (third-party, recorded 2026-11-05):** the **non-forced** single-area forms work on
   hardware: set `[0x2D, 0x01, area]` (count 1, no `0x80` force flag) and unset
   `[0x2F, 0x01, area]` (aiopyronix `control_frame`; HA-Pyronix README, §13.1). That client also
-  refuses to send a set while the area reports `V` 4 or 5. Not yet tried by us.
+  refuses to send a set while the area reports `V` 4 or 5.
+- **Observed (live, 2026-11-06 07:00 UTC):** arming and disarming through this integration
+  (`set_areas` / `unset_areas` in `commands.py`) worked on our Euro 46 V10.26. The library
+  reports success only once the panel pushes the area as Setting or Set (`V` 3 or 1) after a set,
+  and as Unset (`V` 0) after an unset (`area_rules.py`), so the panel accepted both commands and
+  reported the new state over the open session. Not recorded: whether the set used the `0x80`
+  force flag, and the `V` values and timings it passed through.
 - Area numbers are `OcpArea.id`, the area's `R` value from panel JSON (§6.3), as one byte.
 - Input and output numbers are one byte (`(byte)`), so input IDs above 255 would be truncated.
   **Unknown** whether the panel supports more than 255.
@@ -593,8 +599,10 @@ one-letter names showed up in jadx as unrelated library constants; they resolve 
 opened, the panel pushed area A with `V:5` (CanOverride), `S:"Set Delayed"` and
 `Faults.List:[{"I":"Landing DT Open"}]`. When it closed, the panel pushed `V:0` (Unset). So `V:5`
 means "not ready: setting would need an override", not "arming". Each change is re-sent about once
-a second for 2–3 copies, so deduplicate. Unused areas report `V:4` (CannotSet). A real
-set/exit-delay/set sequence has **not** been captured by us yet.
+a second for 2–3 copies, so deduplicate. Unused areas report `V:4` (CannotSet). **Observed
+(live, 2026-11-06):** a set and an unset sent by the integration were confirmed by pushed area
+states (§5). The `V` values and timings through the exit delay were not recorded, so the full
+set/exit-delay/set sequence is still not captured by us.
 
 **Reported (third-party, recorded 2026-11-05):** after a set command, the area is pushed over the
 open session as `V:3` (Setting) for the exit delay, about 30–40 s on their panel, then `V:1`
@@ -965,7 +973,7 @@ b_payload = b"\x01" + pub
 | 9 | REST API base URL | Resolve `AppBuild.f().d()` |
 | 10 | Is a separate cloud "subscription" (`i` = expired) needed for app access? | Pyronix account terms |
 | 11 | **Session exclusivity.** Observed: while the probe was connected (as a separate panel user), the phone app could not log in; it got in at once after the probe disconnected. A probe started while the app was logged in connected fine. **Unknown:** whether that dropped the app (newest wins) or the app had released the slot. **Reported (third-party, 2026-11-05):** straight after a goodbye the cloud sometimes answers `n` and accepts a new connection ~35 s later (§3.4), so the slot may not free at once | Watch the app during a probe run |
-| 12 | What a real set looks like: `V` sequence through exit delay to Set, and with Final Door exit mode. **Partly answered (third-party, 2026-11-05):** `V:3` (Setting) for ~30–40 s, then `V:1` (Set), pushed over the open session (§6.3). Still needs our own capture, including Final Door exit mode | Capture while setting from the app |
+| 12 | What a real set looks like: `V` sequence through exit delay to Set, and with Final Door exit mode. **Partly answered (third-party, 2026-11-05):** `V:3` (Setting) for ~30–40 s, then `V:1` (Set), pushed over the open session (§6.3). **Observed (live, 2026-11-06):** set and unset through the integration are confirmed by pushed area states on our Euro 46 (§5). Still needs our own capture of the `V` sequence and timings, including Final Door exit mode | Capture while setting from the app |
 | 13 | What the panel does when the login `D` frame was encrypted with a wrong app password (key mismatch): `c` NACKs, `e`, or silence? The library maps both "no `d` frame ever verifies" and "our login is NACKed to the limit" to an authentication error. **Reported (third-party, 2026-11-05):** aiopyronix treats an integrity failure on a data frame, or any `e`/`f`/`c` frame, before the first area data as an authentication failure (`_handle_panel_data`). That corroborates our inferred mapping, but it is a heuristic, not a captured trace | Capture with a deliberately wrong app password (costs a failed login; ask first) |
 
 The cheapest way to answer most of these is to run the real app on a physical Android phone with a
