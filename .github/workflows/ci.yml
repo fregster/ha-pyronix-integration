@@ -120,8 +120,6 @@ jobs:
         with:
           category: integration
           comment: false
-          # Brand images live in home-assistant/brands, submitted after the first release.
-          ignore: brands
 
   test-devmode:
     name: Tests (asyncio debug mode)
