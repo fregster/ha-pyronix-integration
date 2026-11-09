@@ -40,7 +40,7 @@ dev = [
 ]
 lint = [
     "ruff==0.17.3",
-    "mypy==1.19.1",
+    "mypy==2.4.1",
     "codespell>=2.4",
     "reuse>=5",
 ]
